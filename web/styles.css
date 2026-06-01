@@ -195,6 +195,17 @@ label {
   text-align: right;
 }
 
+.source-link {
+  color: #8bdcff;
+  text-decoration: none;
+}
+
+.source-link:hover,
+.source-link:focus-visible {
+  color: #dff5ff;
+  text-decoration: underline;
+}
+
 select,
 button {
   height: 34px;

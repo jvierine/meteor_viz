@@ -70,6 +70,7 @@ const sliderReadouts = [
 const DEG = Math.PI / 180;
 const MU = 0.00029592115654562346;
 const DEFAULT_AXIS_LIMIT_AU = 85;
+const DEFAULT_SHOWER_PRESET_ID = "004-GEM";
 
 let gl;
 let program;
@@ -1360,6 +1361,10 @@ function setupControls() {
     },
     { passive: false }
   );
+  if ((window.METEOR_SHOWER_PRESETS || []).some((preset) => preset.id === DEFAULT_SHOWER_PRESET_ID)) {
+    showerPresetEl.value = DEFAULT_SHOWER_PRESET_ID;
+    applyShowerPreset(DEFAULT_SHOWER_PRESET_ID);
+  }
 }
 
 function halfToFloat(h) {

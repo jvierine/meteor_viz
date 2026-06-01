@@ -1,6 +1,4 @@
 {
-  "source": "../data/maarsy_dataset.h5",
-  "group": "full_catalog",
   "count": 1599393,
   "fields": [
     "a_au",
@@ -9,13 +7,10 @@
     "omega_deg",
     "Omega_deg",
     "nu_deg",
-    "epoch_day",
-    "mass_to_area_kg_per_m2",
-    "n_members",
-    "q_au"
+    "log10_mass_to_area_kg_per_m2"
   ],
-  "recordFloat16Count": 10,
-  "recordFloat32Count": 10,
+  "recordFloat16Count": 7,
+  "recordFloat32Count": 7,
   "epochUnixSecond0": 1600056792.0,
   "parameters": {
     "a_au": [
@@ -42,98 +37,96 @@
       8.690774848219007e-06,
       1.0167301893234253
     ],
-    "mass_to_area_kg_per_m2": [
-      0.00010278843546984717,
-      1.0
-    ],
-    "n_members": [
-      1.0,
-      1.0
+    "log10_mass_to_area_kg_per_m2": [
+      -2.0,
+      0.0
     ]
   },
   "defaultColorParameter": "i_deg",
-  "encoding": "float16-le",
+  "encoding": "base64-float16-le-script",
   "float16FiniteClip": 65504.0,
   "shuffleSeed": 20260601,
+  "chunkFilePrefix": "maarsy_full_",
+  "chunkFileSuffix": ".js",
   "chunks": [
     {
-      "file": "maarsy_full_00.f16",
+      "id": 0,
       "count": 79970
     },
     {
-      "file": "maarsy_full_01.f16",
+      "id": 1,
       "count": 79970
     },
     {
-      "file": "maarsy_full_02.f16",
+      "id": 2,
       "count": 79970
     },
     {
-      "file": "maarsy_full_03.f16",
+      "id": 3,
       "count": 79970
     },
     {
-      "file": "maarsy_full_04.f16",
+      "id": 4,
       "count": 79970
     },
     {
-      "file": "maarsy_full_05.f16",
+      "id": 5,
       "count": 79970
     },
     {
-      "file": "maarsy_full_06.f16",
+      "id": 6,
       "count": 79970
     },
     {
-      "file": "maarsy_full_07.f16",
+      "id": 7,
       "count": 79970
     },
     {
-      "file": "maarsy_full_08.f16",
+      "id": 8,
       "count": 79970
     },
     {
-      "file": "maarsy_full_09.f16",
+      "id": 9,
       "count": 79970
     },
     {
-      "file": "maarsy_full_10.f16",
+      "id": 10,
       "count": 79970
     },
     {
-      "file": "maarsy_full_11.f16",
+      "id": 11,
       "count": 79970
     },
     {
-      "file": "maarsy_full_12.f16",
+      "id": 12,
       "count": 79970
     },
     {
-      "file": "maarsy_full_13.f16",
+      "id": 13,
       "count": 79969
     },
     {
-      "file": "maarsy_full_14.f16",
+      "id": 14,
       "count": 79969
     },
     {
-      "file": "maarsy_full_15.f16",
+      "id": 15,
       "count": 79969
     },
     {
-      "file": "maarsy_full_16.f16",
+      "id": 16,
       "count": 79969
     },
     {
-      "file": "maarsy_full_17.f16",
+      "id": 17,
       "count": 79969
     },
     {
-      "file": "maarsy_full_18.f16",
+      "id": 18,
       "count": 79969
     },
     {
-      "file": "maarsy_full_19.f16",
+      "id": 19,
       "count": 79969
     }
   ]

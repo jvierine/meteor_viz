@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 from pathlib import Path
 
@@ -18,10 +19,7 @@ FIELDS = [
     "omega_deg",
     "Omega_deg",
     "nu_deg",
-    "epoch_day",
-    "mass_to_area_kg_per_m2",
-    "n_members",
-    "q_au",
+    "log10_mass_to_area_kg_per_m2",
 ]
 FLOAT16_MAX = np.finfo(np.float16).max
 
@@ -48,14 +46,11 @@ def export_chunks(input_path, output_dir, chunk_count, seed):
 
     with h5py.File(input_path, "r") as h:
         kepler = h["kepler"][()].astype(np.float32)
-        epoch = h["kepler_epoch_unix_second"][()].astype(np.float64)
         mass_to_area = h["mass_to_area_kg_per_m2"][()].astype(np.float32)
 
     count = int(kepler.shape[0])
-    epoch0 = float(np.nanmedian(epoch))
-    epoch_day = ((epoch - epoch0) / 86400.0).astype(np.float32)
     q_au = perihelion_distance_au(kepler).astype(np.float32)
-    n_members = np.ones(count, dtype=np.float32)
+    log_mass_to_area = np.clip(np.log10(np.maximum(mass_to_area, 1e-12)), -2.0, 0.0).astype(np.float32)
     table = np.column_stack(
         (
             kepler[:, 0],
@@ -64,10 +59,7 @@ def export_chunks(input_path, output_dir, chunk_count, seed):
             kepler[:, 3],
             kepler[:, 4],
             kepler[:, 5],
-            epoch_day,
-            mass_to_area,
-            n_members,
-            q_au,
+            log_mass_to_area,
         )
     )
 
@@ -75,10 +67,19 @@ def export_chunks(input_path, output_dir, chunk_count, seed):
     order = rng.permutation(count)
     chunks = []
     for chunk_index, rows in enumerate(np.array_split(order, chunk_count)):
-        name = f"maarsy_full_{chunk_index:02d}.f16"
+        name = f"maarsy_full_{chunk_index:02d}.js"
         chunk = np.clip(table[rows], -FLOAT16_MAX, FLOAT16_MAX).astype("<f2", copy=False)
-        (output_dir / name).write_bytes(chunk.tobytes())
-        chunks.append({"file": name, "count": int(len(rows))})
+        payload = {
+            "id": chunk_index,
+            "count": int(len(rows)),
+            "base64Float16": base64.b64encode(chunk.tobytes()).decode("ascii"),
+        }
+        (output_dir / name).write_text(
+            "window.METEOR_VIZ_CHUNK = "
+            + json.dumps(payload, separators=(",", ":"))
+            + ";\n"
+        )
+        chunks.append({"id": chunk_index, "count": int(len(rows))})
 
     params = {
         "a_au": finite_range(kepler[:, 0]),
@@ -87,22 +88,21 @@ def export_chunks(input_path, output_dir, chunk_count, seed):
         "omega_deg": finite_range(kepler[:, 3]),
         "Omega_deg": finite_range(kepler[:, 4]),
         "q_au": finite_range(q_au),
-        "mass_to_area_kg_per_m2": finite_range(mass_to_area),
-        "n_members": [1.0, 1.0],
+        "log10_mass_to_area_kg_per_m2": [-2.0, 0.0],
     }
     metadata = {
-        "source": str(input_path),
-        "group": "full_catalog",
         "count": count,
         "fields": FIELDS,
         "recordFloat16Count": len(FIELDS),
         "recordFloat32Count": len(FIELDS),
-        "epochUnixSecond0": epoch0,
+        "epochUnixSecond0": 1600056792.0,
         "parameters": params,
         "defaultColorParameter": "i_deg",
-        "encoding": "float16-le",
+        "encoding": "base64-float16-le-script",
         "float16FiniteClip": float(FLOAT16_MAX),
         "shuffleSeed": seed,
+        "chunkFilePrefix": "maarsy_full_",
+        "chunkFileSuffix": ".js",
         "chunks": chunks,
     }
 

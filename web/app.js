@@ -7,10 +7,8 @@ const FIELD = {
   OMEGA: 3,
   NODE: 4,
   NU: 5,
-  EPOCH_DAY: 6,
-  MASS_TO_AREA: 7,
-  MEMBERS: 8,
-  Q: 9,
+  MASS_TO_AREA: 6,
+  Q: -1,
 };
 const COLOR_PARAMS = [
   ["a_au", "Semi-major axis", FIELD.A, "AU"],
@@ -19,12 +17,11 @@ const COLOR_PARAMS = [
   ["omega_deg", "Argument of perihelion", FIELD.OMEGA, "deg"],
   ["Omega_deg", "Ascending node", FIELD.NODE, "deg"],
   ["q_au", "Perihelion distance", FIELD.Q, "AU"],
-  ["mass_to_area_kg_per_m2", "Mass / area", FIELD.MASS_TO_AREA, "kg m^-2"],
-  ["n_members", "Merged members", FIELD.MEMBERS, ""],
+  ["log10_mass_to_area_kg_per_m2", "log10 Mass / area", FIELD.MASS_TO_AREA, "log10 kg m^-2", [-2, 0]],
 ];
 const FILTER_PARAMS = [
   { key: "a_au", label: "a", field: FIELD.A, type: "range", min: 0, max: 100, step: 0.5, unit: "AU" },
-  { key: "e", label: "e", field: FIELD.E, type: "range", min: 0, max: 2, step: 0.01, unit: "" },
+  { key: "e", label: "e", field: FIELD.E, type: "range", min: 0, max: 1, step: 0.01, unit: "" },
   { key: "i_deg", label: "i", field: FIELD.I, type: "angle", min: 0, max: 180, center: 90, extent: 180, step: 1, unit: "deg", wrap: false },
   { key: "omega_deg", label: "omega", field: FIELD.OMEGA, type: "angle", min: 0, max: 360, center: 180, extent: 360, step: 1, unit: "deg", wrap: true },
   { key: "Omega_deg", label: "Omega", field: FIELD.NODE, type: "angle", min: 0, max: 360, center: 180, extent: 360, step: 1, unit: "deg", wrap: true },
@@ -43,9 +40,12 @@ const alphaEl = document.querySelector("#alpha");
 const starVisibilityEl = document.querySelector("#starVisibility");
 const planetSizeEl = document.querySelector("#planetSize");
 const radiusEl = document.querySelector("#radius");
+const randomizeMeanAnomalyEl = document.querySelector("#randomizeMeanAnomaly");
+const showEarthOrbitBlipsEl = document.querySelector("#showEarthOrbitBlips");
 const filterControlsEl = document.querySelector("#filterControls");
 const playPauseEl = document.querySelector("#playPause");
 const resetViewEl = document.querySelector("#resetView");
+const musicToggleEl = document.querySelector("#musicToggle");
 const timeReadoutEl = document.querySelector("#timeReadout");
 const axisReadoutEl = document.querySelector("#axisReadout");
 const rangeReadoutEl = document.querySelector("#rangeReadout");
@@ -72,6 +72,8 @@ let program;
 let guideBuffer;
 let trailPositionBuffer;
 let trailColorBuffer;
+let blipPositionBuffer;
+let blipColorBuffer;
 let planetOrbitPositionBuffer;
 let planetOrbitColorBuffer;
 let planetPointPositionBuffer;
@@ -88,14 +90,17 @@ let meteorCount = 0;
 let chunkMeteorCount = 0;
 let activeChunkIndex = -1;
 let nextChunkIndex = 0;
-let chunkSamplesRemaining = 0;
-let chunkLoadPromise = null;
+let chunkSearchPromise = null;
+let chunkSearchGeneration = 0;
+let chunksSearchedForFilter = 0;
 let starCount = 0;
 let stride = 0;
 let starStride = 0;
 let segmentCount = 16;
 let trailPositions;
 let trailColors;
+let blipPositions;
+let blipColors;
 let planetOrbitPositions;
 let planetOrbitColors;
 let planetPointPositions;
@@ -111,28 +116,37 @@ let paused = false;
 let colorRange = [0, 1];
 let trailVertexCount = 0;
 let trailDrawVertexCount = 0;
+let blipPointCount = 0;
 let planetOrbitVertexCount = 0;
 let planetPointCount = 0;
 let guideLineVertexCount = 0;
 let guidePointStart = 0;
 let visibleMeteorCount = 0;
-const MAX_DRAWN_METEORS = 10000;
+const MAX_DRAWN_METEORS = 20000;
 let activeSlots = [];
 let candidateIndices = [];
-let candidateCumulativeWeights = new Float64Array(0);
-let candidateTotalWeight = 0;
-let candidateSet = new Set();
+let matchingMeteorCount = 0;
 let lastFilterSignature = "";
+let audioContext = null;
+let musicMaster = null;
+let musicDelay = null;
+let musicFeedback = null;
+let musicFilter = null;
+let musicTimer = null;
+let musicStep = 0;
 const filters = new Map();
 
-const camera = { yaw: 0.78, pitch: 0.36, roll: 0, distance: 10 };
+const camera = { yaw: 0.78, pitch: 0.36, roll: 0, distance: 153 };
 const pointer = { active: false, button: 0, x: 0, y: 0 };
 
 const J2000_UNIX_SECOND = 946728000;
 const PLANET_ORBIT_STEPS = 240;
-const SUN_POINT_SIZE_PX = 28;
+const SUN_POINT_SIZE_PX = 7;
+const EARTH_ORBIT_BLIP_DISTANCE_AU = 0.1;
+const BLIP_POINT_SIZE_PX = 13;
 const STAR_RADIUS = 80;
-const STAR_POINT_SIZE_PX = 3.2;
+const STAR_POINT_SCALE = 1.15;
+const STAR_LIMITING_MAG = 8.0;
 const J2000_OBLIQUITY = 23.4392911 * Math.PI / 180;
 const PLANETS = [
   { name: "Mercury", a: 0.38709893, e: 0.20563069, i: 7.00487, L: 252.25084, peri: 77.45645, node: 48.33167, color: [0.78, 0.72, 0.62] },
@@ -152,29 +166,57 @@ uniform mat4 uProjection;
 uniform mat4 uView;
 uniform float uPointSize;
 uniform float uAlphaScale;
+uniform bool uStarMode;
 out vec4 vColor;
+out float vStarMag;
+out float vStarAlpha;
 void main() {
   vColor = vec4(aColor.rgb, aColor.a * uAlphaScale);
+  vStarMag = aColor.a;
+  vStarAlpha = clamp(0.18 + 0.82 * (${STAR_LIMITING_MAG.toFixed(1)} - aColor.a + 0.5) / max(1.0, ${STAR_LIMITING_MAG.toFixed(1)} + 1.0), 0.16, 1.0);
   gl_Position = uProjection * uView * vec4(aPosition, 1.0);
-  gl_PointSize = uPointSize;
+  if (uStarMode) {
+    float size = 2.4 + 12.5 * pow(10.0, -0.13 * (aColor.a + 1.0));
+    gl_PointSize = clamp(size * uPointSize, 2.5, 26.0 * uPointSize);
+  } else {
+    gl_PointSize = uPointSize;
+  }
 }`;
 
 const fragmentSource = `#version 300 es
-precision mediump float;
+precision highp float;
 uniform bool uPointMode;
 uniform bool uSoftPoint;
+uniform bool uStarMode;
+uniform float uAlphaScale;
 in vec4 vColor;
+in float vStarMag;
+in float vStarAlpha;
 out vec4 outColor;
 void main() {
   float alpha = vColor.a;
   if (uPointMode) {
     vec2 p = gl_PointCoord - vec2(0.5);
-    float r = length(p) * 2.0;
-    if (r > 1.0) discard;
-    if (uSoftPoint) {
-      float core = exp(-5.5 * r * r);
-      float halo = exp(-1.25 * r * r) * 0.28;
-      alpha *= min(1.0, core + halo);
+    if (uStarMode) {
+      float r = length(p);
+      if (r > 0.5) discard;
+      float core = exp(-r * r / 0.010);
+      float halo = exp(-r * r / 0.085);
+      float edge = smoothstep(0.5, 0.42, r);
+      alpha = clamp(2.30 * core + 0.84 * halo, 0.0, 1.0) * edge * vStarAlpha * uAlphaScale;
+      vec3 coolWhite = vec3(0.78, 0.88, 1.0);
+      vec3 warmWhite = vec3(1.0, 0.96, 0.84);
+      vec3 color = mix(warmWhite, coolWhite, clamp((2.5 - vStarMag) / 4.0, 0.0, 1.0));
+      outColor = vec4(min(color * 2.0, vec3(1.0)), alpha);
+      return;
+    } else {
+      float r = length(p) * 2.0;
+      if (r > 1.0) discard;
+      if (uSoftPoint) {
+        float core = exp(-1.45 * r * r);
+        float halo = exp(-0.28 * r * r) * 0.48;
+        alpha *= min(1.0, core + halo);
+      }
     }
   }
   outColor = vec4(vColor.rgb, alpha);
@@ -324,11 +366,23 @@ function selectedParam() {
   return COLOR_PARAMS.find((p) => p[0] === colorParamEl.value) || COLOR_PARAMS[0];
 }
 
+function perihelionDistanceFromRecord(record) {
+  const a = Math.abs(record[FIELD.A]);
+  const e = record[FIELD.E];
+  return Math.max(e <= 1 ? a * (1 - e) : a * (e - 1), 1e-12);
+}
+
 function recordValue(record, field) {
+  if (field === FIELD.Q) return perihelionDistanceFromRecord(record);
   return record[field];
 }
 
 function valueForField(row, field) {
+  if (field === FIELD.Q) {
+    const a = Math.abs(dataTable[row + FIELD.A]);
+    const e = dataTable[row + FIELD.E];
+    return Math.max(e <= 1 ? a * (1 - e) : a * (e - 1), 1e-12);
+  }
   return dataTable[row + field];
 }
 
@@ -395,60 +449,47 @@ function exponentialLifetime(meanDays) {
   return -meanDays * Math.log(Math.max(1e-9, 1 - Math.random()));
 }
 
-function randomCandidate() {
-  if (!candidateIndices.length || candidateTotalWeight <= 0) return null;
-  const target = Math.random() * candidateTotalWeight;
-  let lo = 0;
-  let hi = candidateCumulativeWeights.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (target < candidateCumulativeWeights[mid]) hi = mid;
-    else lo = mid + 1;
-  }
-  return candidateIndices[lo];
+function desiredDrawCount() {
+  const drawLimit = Math.min(MAX_DRAWN_METEORS, Math.max(1, Number(drawLimitEl.value)));
+  return Math.min(drawLimit, meteorCount);
 }
 
-function sampledMeteor() {
-  if (chunkSamplesRemaining <= 0 && metadata.chunks.length > 1) {
-    requestNextChunk();
-  }
+function randomCandidate() {
+  if (!candidateIndices.length) return null;
+  const slot = Math.floor(Math.random() * candidateIndices.length);
+  const index = candidateIndices[slot];
+  candidateIndices[slot] = candidateIndices[candidateIndices.length - 1];
+  candidateIndices.pop();
+  return index;
+}
+
+function sampledMeteorFromCurrentChunk() {
   const index = randomCandidate();
   if (index == null) return null;
-  chunkSamplesRemaining -= 1;
   const row = index * stride;
   const record = dataTable.slice(row, row + stride);
   return {
     record,
-    color: [meteorColors[index * 3], meteorColors[index * 3 + 1], meteorColors[index * 3 + 2]],
+    meanAnomalyOffset: randomizeMeanAnomalyEl.checked ? Math.random() * Math.PI * 2 : 0,
   };
 }
 
 function rebuildCandidatePool(maxRadius) {
   candidateIndices = [];
-  const weights = [];
-  candidateTotalWeight = 0;
   for (let i = 0; i < chunkMeteorCount; i++) {
     const row = i * stride;
     if (!passesFilters(row)) continue;
     candidateIndices.push(i);
-    const members = dataTable[row + FIELD.MEMBERS];
-    candidateTotalWeight += Number.isFinite(members) && members > 0 ? members : 1;
-    weights.push(candidateTotalWeight);
   }
-  candidateCumulativeWeights = new Float64Array(weights);
-  visibleMeteorCount = candidateIndices.length;
-  candidateSet = new Set(candidateIndices);
-  if (candidateIndices.length === 0) requestNextChunk();
+  matchingMeteorCount += candidateIndices.length;
+  visibleMeteorCount = matchingMeteorCount;
 }
 
-function resetActiveSlots(meanDays) {
-  const drawLimit = Math.min(MAX_DRAWN_METEORS, Math.max(1, Number(drawLimitEl.value)));
-  const drawCount = Math.min(drawLimit, candidateIndices.length);
-  const startedAt = animationTimeDay - Number(trailEl.value);
-  activeSlots = [];
-  for (let slot = 0; slot < drawCount; slot++) {
-    const meteor = sampledMeteor();
-    if (!meteor) continue;
+function fillActiveSlotsFromCurrentChunk(meanDays, startedAt) {
+  const drawCount = desiredDrawCount();
+  while (activeSlots.length < drawCount) {
+    const meteor = sampledMeteorFromCurrentChunk();
+    if (!meteor) break;
     activeSlots.push({
       meteor,
       startedAt,
@@ -457,24 +498,160 @@ function resetActiveSlots(meanDays) {
   }
 }
 
+async function searchChunksForMoreMeteors(meanDays, startedAt, generation) {
+  if (chunkSearchPromise) return chunkSearchPromise;
+  chunkSearchPromise = (async () => {
+    while (generation === chunkSearchGeneration && activeSlots.length < desiredDrawCount() && chunksSearchedForFilter < metadata.chunks.length) {
+      await loadCatalogChunk(nextChunkIndex, { updateStatus: false });
+      if (generation !== chunkSearchGeneration) break;
+      chunksSearchedForFilter += 1;
+      rebuildCandidatePool(Number(radiusEl.value));
+      fillActiveSlotsFromCurrentChunk(meanDays, startedAt);
+    }
+    if (generation === chunkSearchGeneration) {
+      const count = activeSlots.length.toLocaleString();
+      const requested = desiredDrawCount().toLocaleString();
+      statusEl.textContent =
+        activeSlots.length < desiredDrawCount()
+          ? `Found ${count} meteoroids matching the current filters across all chunks.`
+          : `Showing ${count} filtered meteoroids from streamed chunks.`;
+    }
+  })().finally(() => {
+    chunkSearchPromise = null;
+  });
+  return chunkSearchPromise;
+}
+
+function requestMoreMatchingMeteors(meanDays, startedAt) {
+  if (chunkSearchPromise || chunksSearchedForFilter >= metadata.chunks.length) return;
+  searchChunksForMoreMeteors(meanDays, startedAt, chunkSearchGeneration).catch((error) => {
+    console.error(error);
+    statusEl.textContent = error.message;
+  });
+}
+
+function resetActiveSlots() {
+  activeSlots = [];
+  matchingMeteorCount = 0;
+  chunksSearchedForFilter = 0;
+  candidateIndices = [];
+  chunkSearchGeneration += 1;
+}
+
 function updateActiveSlots(meanDays) {
-  const drawLimit = Math.min(MAX_DRAWN_METEORS, Math.max(1, Number(drawLimitEl.value)));
-  const drawCount = Math.min(drawLimit, candidateIndices.length);
+  const drawCount = desiredDrawCount();
   if (activeSlots.length > drawCount) activeSlots.length = drawCount;
-  while (activeSlots.length < drawCount) {
-    const meteor = sampledMeteor();
-    if (!meteor) break;
-    activeSlots.push({ meteor, startedAt: animationTimeDay, expiresAt: animationTimeDay + exponentialLifetime(meanDays) });
-  }
   for (const slot of activeSlots) {
     if (animationTimeDay >= slot.expiresAt) {
-      const meteor = sampledMeteor();
-      if (!meteor) continue;
+      const meteor = sampledMeteorFromCurrentChunk();
+      if (!meteor) {
+        requestMoreMatchingMeteors(meanDays, animationTimeDay);
+        continue;
+      }
       slot.meteor = meteor;
       slot.startedAt = animationTimeDay;
       slot.expiresAt = animationTimeDay + exponentialLifetime(meanDays);
     }
   }
+  if (activeSlots.length < drawCount) requestMoreMatchingMeteors(meanDays, animationTimeDay);
+}
+
+function midiToHz(note) {
+  return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+function createTone(frequency, startTime, duration, gain, type = "sine", detune = 0) {
+  const osc = audioContext.createOscillator();
+  const amp = audioContext.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, startTime);
+  osc.detune.setValueAtTime(detune, startTime);
+  amp.gain.setValueAtTime(0, startTime);
+  amp.gain.linearRampToValueAtTime(gain, startTime + 0.08);
+  amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain * 0.58), startTime + duration * 0.45);
+  amp.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  osc.connect(amp);
+  amp.connect(musicFilter);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+
+function playAmbientStep() {
+  if (!audioContext || !musicMaster) return;
+  const now = audioContext.currentTime + 0.05;
+  const progression = [
+    [57, 64, 69, 76],
+    [53, 60, 67, 72],
+    [55, 62, 69, 74],
+    [52, 59, 64, 71],
+  ];
+  const chord = progression[Math.floor(musicStep / 4) % progression.length];
+  const beat = musicStep % 4;
+
+  if (beat === 0) {
+    for (const note of chord) {
+      createTone(midiToHz(note), now, 7.6, 0.018, "sine", -4);
+      createTone(midiToHz(note + 12), now + 0.04, 7.2, 0.007, "triangle", 5);
+    }
+  }
+
+  const sparkle = chord[(musicStep * 2 + 1) % chord.length] + 24;
+  createTone(midiToHz(sparkle), now + 0.08, 1.8, 0.012, "triangle", 0);
+  if (musicStep % 2 === 1) createTone(midiToHz(sparkle + 7), now + 0.62, 1.35, 0.007, "sine", 0);
+  musicStep += 1;
+}
+
+function startPlanetariumMusic() {
+  if (musicTimer) return;
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    musicMaster = audioContext.createGain();
+    musicFilter = audioContext.createBiquadFilter();
+    musicDelay = audioContext.createDelay(8);
+    musicFeedback = audioContext.createGain();
+
+    musicMaster.gain.value = 0.16;
+    musicFilter.type = "lowpass";
+    musicFilter.frequency.value = 2400;
+    musicFilter.Q.value = 0.5;
+    musicDelay.delayTime.value = 0.42;
+    musicFeedback.gain.value = 0.28;
+
+    musicFilter.connect(musicMaster);
+    musicFilter.connect(musicDelay);
+    musicDelay.connect(musicFeedback);
+    musicFeedback.connect(musicDelay);
+    musicDelay.connect(musicMaster);
+    musicMaster.connect(audioContext.destination);
+  }
+  audioContext.resume();
+  const now = audioContext.currentTime;
+  musicMaster.gain.cancelScheduledValues(now);
+  musicMaster.gain.setTargetAtTime(0.16, now, 0.6);
+  musicStep = 0;
+  playAmbientStep();
+  musicTimer = window.setInterval(playAmbientStep, 1900);
+  musicToggleEl.setAttribute("aria-pressed", "true");
+  musicToggleEl.setAttribute("aria-label", "Stop planetarium music");
+  musicToggleEl.classList.add("toggle-on");
+}
+
+function stopPlanetariumMusic() {
+  if (musicTimer) window.clearInterval(musicTimer);
+  musicTimer = null;
+  if (musicMaster && audioContext) {
+    const now = audioContext.currentTime;
+    musicMaster.gain.cancelScheduledValues(now);
+    musicMaster.gain.setTargetAtTime(0.0001, now, 0.7);
+  }
+  musicToggleEl.setAttribute("aria-pressed", "false");
+  musicToggleEl.setAttribute("aria-label", "Play planetarium music");
+  musicToggleEl.classList.remove("toggle-on");
+}
+
+function togglePlanetariumMusic() {
+  if (musicTimer) stopPlanetariumMusic();
+  else startPlanetariumMusic();
 }
 
 function planetElements(planet) {
@@ -542,9 +719,7 @@ function setupStarBuffers() {
     const direction = starDirection(starTable[row], starTable[row + 1]);
     starPositions.set([direction[0] * STAR_RADIUS, direction[1] * STAR_RADIUS, direction[2] * STAR_RADIUS], i * 3);
     const mag = starTable[row + 2];
-    const brightness = Math.max(0.08, Math.min(1, Math.pow(10, -0.4 * (mag - 1.0))));
-    const alpha = Math.max(0.12, Math.min(0.9, 0.16 + brightness * 0.74));
-    starColors.set([0.78 + brightness * 0.22, 0.82 + brightness * 0.18, 0.9 + brightness * 0.1, alpha], i * 4);
+    starColors.set([1, 1, 1, mag], i * 4);
   }
   starPositionBuffer = gl.createBuffer();
   starColorBuffer = gl.createBuffer();
@@ -563,7 +738,7 @@ function column(index) {
 function updateColors() {
   const param = selectedParam();
   const values = column(param[2]);
-  colorRange = [percentile(values, 0.02), percentile(values, 0.98)];
+  colorRange = param[4] ? param[4] : [percentile(values, 0.02), percentile(values, 0.98)];
   if (colorRange[0] === colorRange[1]) colorRange[1] = colorRange[0] + 1;
   meteorColors = new Float32Array(chunkMeteorCount * 3);
   for (let i = 0; i < chunkMeteorCount; i++) {
@@ -576,14 +751,20 @@ function updateColors() {
   rangeReadoutEl.textContent = `${formatValue(colorRange[0], param[3])} - ${formatValue(colorRange[1], param[3])}`;
 }
 
-function keplerPosition(record, tDay, maxRadius) {
+function colorForRecord(record) {
+  const param = selectedParam();
+  const value = recordValue(record, param[2]);
+  return turbo((value - colorRange[0]) / (colorRange[1] - colorRange[0]));
+}
+
+function keplerPosition(record, tDay, maxRadius, meanAnomalyOffset = 0) {
   const a = recordValue(record, FIELD.A);
   const e = recordValue(record, FIELD.E);
   const inc = recordValue(record, FIELD.I) * DEG;
   const argp = recordValue(record, FIELD.OMEGA) * DEG;
   const node = recordValue(record, FIELD.NODE) * DEG;
   const nu0 = recordValue(record, FIELD.NU) * DEG;
-  const dt = tDay - recordValue(record, FIELD.EPOCH_DAY);
+  const dt = tDay;
   const absA = Math.max(Math.abs(a), 1e-6);
   const cosNu0 = Math.cos(nu0);
   const sinNu0 = Math.sin(nu0);
@@ -593,7 +774,7 @@ function keplerPosition(record, tDay, maxRadius) {
   if (e < 0.999) {
     const root = Math.sqrt(Math.max(1 - e * e, 0));
     const E0 = Math.atan2(root * sinNu0, e + cosNu0);
-    let M = E0 - e * Math.sin(E0) + Math.sqrt(MU / (absA * absA * absA)) * dt;
+    let M = E0 - e * Math.sin(E0) + meanAnomalyOffset + Math.sqrt(MU / (absA * absA * absA)) * dt;
     M = ((((M + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
     let E = e < 0.8 ? M : (M < 0 ? -Math.PI : Math.PI);
     for (let k = 0; k < 16; k++) {
@@ -641,6 +822,30 @@ function segmentIsContinuous(a, b, maxRadius, trailDays) {
   return jump <= Math.min(maxRadius * 0.75, Math.max(perSegmentLimit, speedLimit));
 }
 
+function solarDistanceAlpha(a, b) {
+  const mx = (a[0] + b[0]) * 0.5;
+  const my = (a[1] + b[1]) * 0.5;
+  const mz = (a[2] + b[2]) * 0.5;
+  return Math.min(4, Math.max(0.08, Math.hypot(mx, my, mz)));
+}
+
+function orbitalVelocityTailScale(record, tDay, maxRadius, meanAnomalyOffset) {
+  const pos = keplerPosition(record, tDay, maxRadius, meanAnomalyOffset);
+  if (!pos) return 1;
+  const r = Math.max(1e-6, Math.hypot(pos[0], pos[1], pos[2]));
+  const a = Math.max(1e-6, Math.abs(recordValue(record, FIELD.A)));
+  const e = recordValue(record, FIELD.E);
+  const speedSq = MU * (e > 1 ? 2 / r + 1 / a : 2 / r - 1 / a);
+  const speed = Math.sqrt(Math.max(speedSq, 1e-10));
+  const earthCircularSpeed = Math.sqrt(MU);
+  return Math.min(24, Math.max(0.04, earthCircularSpeed / speed));
+}
+
+function distanceToEarthOrbit(pos) {
+  const rho = Math.hypot(pos[0], pos[1]);
+  return Math.hypot(rho - 1, pos[2]);
+}
+
 function rebuildGeometry() {
   const maxRadius = Number(radiusEl.value);
   const trailDays = Number(trailEl.value);
@@ -651,10 +856,16 @@ function rebuildGeometry() {
   const far = 1e6;
   let vp = 0;
   let vc = 0;
+  let bp = 0;
+  let bc = 0;
+  blipPointCount = 0;
 
-  if (signature !== lastFilterSignature || activeSlots.length === 0) {
+  if (signature !== lastFilterSignature) {
+    resetActiveSlots();
+    chunksSearchedForFilter = chunkMeteorCount > 0 ? 1 : 0;
     rebuildCandidatePool(maxRadius);
-    resetActiveSlots(meanLifetimeDays);
+    fillActiveSlotsFromCurrentChunk(meanLifetimeDays, animationTimeDay - Number(trailEl.value));
+    if (activeSlots.length < desiredDrawCount()) requestMoreMatchingMeteors(meanLifetimeDays, animationTimeDay);
     lastFilterSignature = signature;
   } else {
     updateActiveSlots(meanLifetimeDays);
@@ -662,20 +873,36 @@ function rebuildGeometry() {
 
   for (const slot of activeSlots) {
     const record = slot.meteor.record;
-    const color = slot.meteor.color;
+    const meanAnomalyOffset = slot.meteor.meanAnomalyOffset || 0;
+    const color = colorForRecord(record);
+    const currentPos = showEarthOrbitBlipsEl.checked ? keplerPosition(record, animationTimeDay, maxRadius, meanAnomalyOffset) : null;
+    if (showEarthOrbitBlipsEl.checked && currentPos) {
+      const earthOrbitDistance = distanceToEarthOrbit(currentPos);
+      if (earthOrbitDistance <= EARTH_ORBIT_BLIP_DISTANCE_AU) {
+        const closeness = 1 - earthOrbitDistance / EARTH_ORBIT_BLIP_DISTANCE_AU;
+        const pulse = 0.58 + 0.42 * Math.sin(performance.now() * 0.012 + blipPointCount * 0.73);
+        blipPositions.set(currentPos, bp);
+        blipColors.set([1.0, 0.9, 0.32, Math.min(1, (0.32 + 0.68 * closeness) * pulse)], bc);
+        bp += 3;
+        bc += 4;
+        blipPointCount += 1;
+      }
+    }
+    const scaledTrailDays = trailDays * orbitalVelocityTailScale(record, animationTimeDay, maxRadius, meanAnomalyOffset);
     let prev = null;
     for (let s = 0; s < segmentCount; s++) {
       const phase = s / (segmentCount - 1);
-      const sampleTime = animationTimeDay - (1 - phase) * trailDays;
-      const pos = sampleTime >= slot.startedAt ? keplerPosition(record, sampleTime, maxRadius) : null;
+      const sampleTime = animationTimeDay - (1 - phase) * scaledTrailDays;
+      const pos = sampleTime >= slot.startedAt ? keplerPosition(record, sampleTime, maxRadius, meanAnomalyOffset) : null;
       if (s > 0) {
-        const continuous = segmentIsContinuous(prev, pos, maxRadius, trailDays);
+        const continuous = segmentIsContinuous(prev, pos, maxRadius, scaledTrailDays);
         const a = continuous ? prev : [far, far, far];
         const b = continuous ? pos : [far, far, far];
         trailPositions.set(a, vp);
         trailPositions.set(b, vp + 3);
         vp += 6;
-        const alpha = Math.min(0.95, (0.015 + 0.145 * phase) * alphaScale);
+        const distanceAlpha = continuous ? solarDistanceAlpha(prev, pos) : 0;
+        const alpha = Math.min(0.95, (0.015 + 0.145 * phase) * alphaScale * distanceAlpha);
         trailColors.set([color[0], color[1], color[2], continuous ? alpha : 0], vc);
         trailColors.set([color[0], color[1], color[2], continuous ? alpha : 0], vc + 4);
         vc += 8;
@@ -716,6 +943,10 @@ function rebuildGeometry() {
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, trailPositions);
   gl.bindBuffer(gl.ARRAY_BUFFER, trailColorBuffer);
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, trailColors);
+  gl.bindBuffer(gl.ARRAY_BUFFER, blipPositionBuffer);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, blipPositions);
+  gl.bindBuffer(gl.ARRAY_BUFFER, blipColorBuffer);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, blipColors);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetOrbitPositionBuffer);
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, planetOrbitPositions);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetOrbitColorBuffer);
@@ -756,6 +987,7 @@ function drawGuide(m) {
   bindBuffers(guideBuffer.positions, guideBuffer.colors);
   gl.uniform1f(gl.getUniformLocation(program, "uAlphaScale"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uSoftPoint"), 0);
+  gl.uniform1i(gl.getUniformLocation(program, "uStarMode"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 0);
   gl.drawArrays(gl.LINES, 0, guideLineVertexCount);
   gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 1);
@@ -787,9 +1019,10 @@ function render(nowMs) {
   gl.disable(gl.DEPTH_TEST);
   gl.uniformMatrix4fv(gl.getUniformLocation(program, "uView"), false, skyView);
   bindBuffers(starPositionBuffer, starColorBuffer);
-  gl.uniform1f(gl.getUniformLocation(program, "uPointSize"), STAR_POINT_SIZE_PX * (window.devicePixelRatio || 1));
+  gl.uniform1f(gl.getUniformLocation(program, "uPointSize"), STAR_POINT_SCALE * (window.devicePixelRatio || 1));
   gl.uniform1f(gl.getUniformLocation(program, "uAlphaScale"), Number(starVisibilityEl.value));
-  gl.uniform1i(gl.getUniformLocation(program, "uSoftPoint"), 1);
+  gl.uniform1i(gl.getUniformLocation(program, "uSoftPoint"), 0);
+  gl.uniform1i(gl.getUniformLocation(program, "uStarMode"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 1);
   gl.drawArrays(gl.POINTS, 0, starCount);
 
@@ -797,6 +1030,7 @@ function render(nowMs) {
   gl.uniformMatrix4fv(gl.getUniformLocation(program, "uView"), false, m.view);
   gl.uniform1f(gl.getUniformLocation(program, "uAlphaScale"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uSoftPoint"), 0);
+  gl.uniform1i(gl.getUniformLocation(program, "uStarMode"), 0);
   drawGuide(m);
   bindBuffers(planetOrbitPositionBuffer, planetOrbitColorBuffer);
   gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 0);
@@ -806,6 +1040,13 @@ function render(nowMs) {
   gl.drawArrays(gl.LINES, 0, trailDrawVertexCount);
 
   gl.disable(gl.DEPTH_TEST);
+  bindBuffers(blipPositionBuffer, blipColorBuffer);
+  gl.uniform1f(gl.getUniformLocation(program, "uPointSize"), BLIP_POINT_SIZE_PX * (window.devicePixelRatio || 1));
+  gl.uniform1i(gl.getUniformLocation(program, "uSoftPoint"), 1);
+  gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 1);
+  gl.drawArrays(gl.POINTS, 0, blipPointCount);
+  gl.uniform1i(gl.getUniformLocation(program, "uSoftPoint"), 0);
+
   bindBuffers(sunPointPositionBuffer, sunPointColorBuffer);
   gl.uniform1f(gl.getUniformLocation(program, "uPointSize"), SUN_POINT_SIZE_PX * (window.devicePixelRatio || 1));
   gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 1);
@@ -826,6 +1067,8 @@ function setupBuffers() {
   planetPointCount = PLANETS.length;
   trailPositions = new Float32Array(trailVertexCount * 3);
   trailColors = new Float32Array(trailVertexCount * 4);
+  blipPositions = new Float32Array(MAX_DRAWN_METEORS * 3);
+  blipColors = new Float32Array(MAX_DRAWN_METEORS * 4);
   planetOrbitPositions = new Float32Array(planetOrbitVertexCount * 3);
   planetOrbitColors = new Float32Array(planetOrbitVertexCount * 4);
   planetPointPositions = new Float32Array(planetPointCount * 3);
@@ -834,6 +1077,8 @@ function setupBuffers() {
   sunPointColors = new Float32Array([1, 0.86, 0.22, 1]);
   trailPositionBuffer = gl.createBuffer();
   trailColorBuffer = gl.createBuffer();
+  blipPositionBuffer = gl.createBuffer();
+  blipColorBuffer = gl.createBuffer();
   planetOrbitPositionBuffer = gl.createBuffer();
   planetOrbitColorBuffer = gl.createBuffer();
   planetPointPositionBuffer = gl.createBuffer();
@@ -844,6 +1089,10 @@ function setupBuffers() {
   gl.bufferData(gl.ARRAY_BUFFER, trailPositions.byteLength, gl.DYNAMIC_DRAW);
   gl.bindBuffer(gl.ARRAY_BUFFER, trailColorBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, trailColors.byteLength, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, blipPositionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, blipPositions.byteLength, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, blipColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, blipColors.byteLength, gl.DYNAMIC_DRAW);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetOrbitPositionBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, planetOrbitPositions.byteLength, gl.DYNAMIC_DRAW);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetOrbitColorBuffer);
@@ -939,6 +1188,10 @@ function setupControls() {
     camera.roll = 0;
     camera.distance = Math.max(10, Number(radiusEl.value) * 1.8);
   });
+  randomizeMeanAnomalyEl.addEventListener("input", () => {
+    lastFilterSignature = "";
+  });
+  musicToggleEl.addEventListener("click", togglePlanetariumMusic);
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   canvas.addEventListener("pointerdown", (event) => {
     pointer.active = true;
@@ -994,34 +1247,54 @@ function decodeFloat16Table(buffer) {
   return output;
 }
 
-async function loadCatalogChunk(index) {
+function bytesFromBase64(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function catalogChunkPath(index) {
+  const prefix = metadata.chunkFilePrefix || "maarsy_full_";
+  const suffix = metadata.chunkFileSuffix || ".js";
+  return `./data/${prefix}${String(index).padStart(2, "0")}${suffix}`;
+}
+
+function loadChunkScript(index) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    window.METEOR_VIZ_CHUNK = null;
+    script.src = catalogChunkPath(index);
+    script.async = true;
+    script.onload = () => {
+      const chunk = window.METEOR_VIZ_CHUNK;
+      script.remove();
+      if (!chunk || chunk.id !== index) reject(new Error(`Catalogue chunk ${index + 1} did not load correctly`));
+      else resolve(chunk);
+    };
+    script.onerror = () => {
+      script.remove();
+      reject(new Error(`Could not load catalogue chunk ${index + 1}`));
+    };
+    document.head.append(script);
+  });
+}
+
+async function loadCatalogChunk(index, options = {}) {
+  const updateStatus = options.updateStatus !== false;
   const chunk = metadata.chunks[index];
-  statusEl.textContent = `Loading catalogue chunk ${index + 1} / ${metadata.chunks.length}...`;
-  const response = await fetch(`./data/${chunk.file}`);
-  if (!response.ok) throw new Error(`Could not load ${chunk.file}`);
-  const table = decodeFloat16Table(await response.arrayBuffer());
-  if (table.length !== chunk.count * stride) throw new Error(`${chunk.file} length does not match metadata`);
+  if (updateStatus) statusEl.textContent = `Loading catalogue chunk ${index + 1} / ${metadata.chunks.length}...`;
+  const payload = await loadChunkScript(index);
+  const bytes = bytesFromBase64(payload.base64Float16);
+  const table = decodeFloat16Table(bytes.buffer);
+  if (table.length !== chunk.count * stride) throw new Error(`Catalogue chunk ${index + 1} length does not match metadata`);
   dataTable = table;
   chunkMeteorCount = chunk.count;
   activeChunkIndex = index;
   nextChunkIndex = (index + 1) % metadata.chunks.length;
-  chunkSamplesRemaining = Math.max(1, chunk.count);
-  lastFilterSignature = "";
+  if (updateStatus) lastFilterSignature = "";
   updateColors();
-  statusEl.textContent = `Streaming full catalogue chunk ${index + 1} / ${metadata.chunks.length}.`;
-}
-
-function requestNextChunk() {
-  if (chunkLoadPromise || !metadata.chunks || metadata.chunks.length <= 1) return;
-  const index = nextChunkIndex;
-  chunkLoadPromise = loadCatalogChunk(index)
-    .catch((error) => {
-      console.error(error);
-      statusEl.textContent = error.message;
-    })
-    .finally(() => {
-      chunkLoadPromise = null;
-    });
+  if (updateStatus) statusEl.textContent = `Streaming full catalogue chunk ${index + 1} / ${metadata.chunks.length}.`;
 }
 
 async function loadData() {

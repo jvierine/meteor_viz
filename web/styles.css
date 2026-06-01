@@ -24,6 +24,28 @@ canvas:active {
   cursor: grabbing;
 }
 
+.iap-logo {
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  z-index: 3;
+  display: block;
+  width: clamp(78px, 9vw, 126px);
+  opacity: 0.58;
+  transition: opacity 140ms ease;
+}
+
+.iap-logo:hover,
+.iap-logo:focus-visible {
+  opacity: 0.92;
+}
+
+.iap-logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .panel {
   position: fixed;
   top: 16px;
@@ -44,6 +66,54 @@ h1 {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.title-row h1 {
+  margin: 0;
+}
+
+.audio-button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: rgba(88, 199, 255, 0.34);
+  background: #111827;
+}
+
+.audio-button.toggle-on {
+  border-color: rgba(118, 226, 169, 0.72);
+  background: #065f46;
+}
+
+.audio-icon {
+  width: 0;
+  height: 0;
+  margin-left: 3px;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid #ffffff;
+}
+
+.audio-button.toggle-on .audio-icon {
+  width: 12px;
+  height: 12px;
+  margin-left: 0;
+  border: 0;
+  border-radius: 1px;
+  background: #ffffff;
 }
 
 #status {
@@ -102,6 +172,18 @@ select:hover {
 
 input[type="range"] {
   width: 100%;
+  accent-color: #58c7ff;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.check-row input {
+  width: 16px;
+  height: 16px;
   accent-color: #58c7ff;
 }
 

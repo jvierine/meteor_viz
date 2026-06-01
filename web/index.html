@@ -12,91 +12,101 @@
     <a class="iap-logo" href="https://www.iap-kborn.de/" target="_blank" rel="noopener" aria-label="IAP Kuehlungsborn">
       <img src="./logo_en.svg" alt="">
     </a>
+    <button id="musicToggle" class="audio-button top-audio-button" type="button" aria-label="Play planetarium music" aria-pressed="false">
+      <span class="audio-icon" aria-hidden="true"></span>
+    </button>
 
     <aside class="panel">
       <header>
         <div class="title-row">
           <h1>MAARSY Meteors</h1>
-          <button id="musicToggle" class="audio-button" type="button" aria-label="Play planetarium music" aria-pressed="false">
-            <span class="audio-icon" aria-hidden="true"></span>
-          </button>
+          <div class="title-actions">
+            <button id="compactToggle" class="compact-toggle" type="button" aria-label="Compact controls" aria-expanded="true">▾</button>
+          </div>
         </div>
         <div id="status">Loading full orbit catalogue...</div>
       </header>
 
-      <label>
-        Color
-        <select id="colorParam"></select>
-      </label>
+      <div id="controlsBody" class="controls-body">
+        <label>
+          Meteor shower
+          <select id="showerPreset"></select>
+        </label>
 
-      <label>
-        <span class="control-head"><span>Speed</span><span class="control-value" id="speedValue"></span></span>
-        <input id="speed" type="range" min="-120" max="120" step="1" value="51">
-      </label>
+        <label>
+          Color
+          <select id="colorParam"></select>
+        </label>
 
-      <label>
-        <span class="control-head"><span>Trail</span><span class="control-value" id="trailValue"></span></span>
-        <input id="trail" type="range" min="5" max="730" step="5" value="60">
-      </label>
+        <label>
+          <span class="control-head"><span>Speed</span><span class="control-value" id="speedValue"></span></span>
+          <input id="speed" type="range" min="-120" max="120" step="1" value="51">
+        </label>
 
-      <label>
-        <span class="control-head"><span>Mean lifetime</span><span class="control-value" id="cycleDaysValue"></span></span>
-        <input id="cycleDays" type="range" min="1" max="180" step="1" value="149">
-      </label>
+        <label>
+          <span class="control-head"><span>Trail</span><span class="control-value" id="trailValue"></span></span>
+          <input id="trail" type="range" min="5" max="730" step="5" value="60">
+        </label>
 
-      <label>
-        <span class="control-head"><span>Meteoroids</span><span class="control-value" id="drawLimitValue"></span></span>
-        <input id="drawLimit" type="range" min="1" max="20000" step="1" value="10000">
-      </label>
+        <label>
+          <span class="control-head"><span>Mean lifetime</span><span class="control-value" id="cycleDaysValue"></span></span>
+          <input id="cycleDays" type="range" min="1" max="180" step="1" value="149">
+        </label>
 
-      <label>
-        <span class="control-head"><span>Alpha</span><span class="control-value" id="alphaValue"></span></span>
-        <input id="alpha" type="range" min="0.25" max="6" step="0.25" value="2.25">
-      </label>
+        <label>
+          <span class="control-head"><span>Meteoroids</span><span class="control-value" id="drawLimitValue"></span></span>
+          <input id="drawLimit" type="range" min="1" max="20000" step="1" value="10000">
+        </label>
 
-      <label>
-        <span class="control-head"><span>Stars</span><span class="control-value" id="starVisibilityValue"></span></span>
-        <input id="starVisibility" type="range" min="0.25" max="8" step="0.25" value="1">
-      </label>
+        <label>
+          <span class="control-head"><span>Alpha</span><span class="control-value" id="alphaValue"></span></span>
+          <input id="alpha" type="range" min="0.25" max="6" step="0.25" value="2.25">
+        </label>
 
-      <label>
-        <span class="control-head"><span>Planet radius</span><span class="control-value" id="planetSizeValue"></span></span>
-        <input id="planetSize" type="range" min="4" max="40" step="1" value="4">
-      </label>
+        <label>
+          <span class="control-head"><span>Stars</span><span class="control-value" id="starVisibilityValue"></span></span>
+          <input id="starVisibility" type="range" min="0.25" max="8" step="0.25" value="1">
+        </label>
 
-      <label>
-        <span class="control-head"><span>Axis limit</span><span class="control-value" id="radiusValue"></span></span>
-        <input id="radius" type="range" min="0" max="100" step="1" value="85">
-      </label>
+        <label>
+          <span class="control-head"><span>Planet radius</span><span class="control-value" id="planetSizeValue"></span></span>
+          <input id="planetSize" type="range" min="4" max="40" step="1" value="4">
+        </label>
 
-      <label class="check-row">
-        <input id="randomizeMeanAnomaly" type="checkbox" checked>
-        <span>Randomize mean anomaly</span>
-      </label>
+        <label>
+          <span class="control-head"><span>Axis limit</span><span class="control-value" id="radiusValue"></span></span>
+          <input id="radius" type="range" min="0" max="100" step="1" value="85">
+        </label>
 
-      <label class="check-row">
-        <input id="showEarthOrbitBlips" type="checkbox" checked>
-        <span>Earth-orbit blips</span>
-      </label>
+        <label class="check-row">
+          <input id="randomizeMeanAnomaly" type="checkbox" checked>
+          <span>Randomize mean anomaly</span>
+        </label>
 
-      <section class="filters">
-        <div class="section-title">Filters</div>
-        <div id="filterControls"></div>
-      </section>
+        <label class="check-row">
+          <input id="showEarthOrbitBlips" type="checkbox">
+          <span>Earth-orbit blips</span>
+        </label>
 
-      <div class="row">
-        <button id="playPause" type="button">Pause</button>
-        <button id="resetView" type="button">Reset</button>
+        <section class="filters">
+          <div class="section-title">Filters</div>
+          <div id="filterControls"></div>
+        </section>
+
+        <div class="row">
+          <button id="playPause" type="button">Pause</button>
+          <button id="resetView" type="button">Reset</button>
+        </div>
+
+        <dl>
+          <div><dt>Meteors</dt><dd id="count">-</dd></div>
+          <div><dt>Visible</dt><dd id="visibleCount">-</dd></div>
+          <div><dt>Drawn</dt><dd id="drawnCount">-</dd></div>
+          <div><dt>Axis limit</dt><dd id="axisReadout">85 AU</dd></div>
+          <div><dt>Date offset</dt><dd id="timeReadout">0 d</dd></div>
+          <div><dt>Color range</dt><dd id="rangeReadout">-</dd></div>
+        </dl>
       </div>
-
-      <dl>
-        <div><dt>Meteors</dt><dd id="count">-</dd></div>
-        <div><dt>Visible</dt><dd id="visibleCount">-</dd></div>
-        <div><dt>Drawn</dt><dd id="drawnCount">-</dd></div>
-        <div><dt>Axis limit</dt><dd id="axisReadout">85 AU</dd></div>
-        <div><dt>Date offset</dt><dd id="timeReadout">0 d</dd></div>
-        <div><dt>Color range</dt><dd id="rangeReadout">-</dd></div>
-      </dl>
     </aside>
 
     <div class="legend">
@@ -105,7 +115,10 @@
       <span id="legendMax"></span>
     </div>
 
+    <div class="credits">Visualization and MAARSY dataset: Juha Vierinen et al.</div>
+
     <script src="./data/maarsy_full_manifest.js"></script>
+    <script src="./data/meteor_shower_presets.js"></script>
     <script src="./data/tycho2_mag8_embedded.js"></script>
     <script src="./app.js"></script>
   </body>

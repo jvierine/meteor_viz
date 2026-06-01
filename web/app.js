@@ -11,24 +11,25 @@ const FIELD = {
   Q: -1,
 };
 const COLOR_PARAMS = [
-  ["a_au", "Semi-major axis", FIELD.A, "AU"],
+  ["a_au", "a (AU)", FIELD.A, "AU"],
   ["e", "Eccentricity", FIELD.E, ""],
-  ["i_deg", "Inclination", FIELD.I, "deg"],
-  ["omega_deg", "Argument of perihelion", FIELD.OMEGA, "deg"],
-  ["Omega_deg", "Ascending node", FIELD.NODE, "deg"],
-  ["q_au", "Perihelion distance", FIELD.Q, "AU"],
-  ["log10_mass_to_area_kg_per_m2", "log10 Mass / area", FIELD.MASS_TO_AREA, "log10 kg m^-2", [-2, 0]],
+  ["i_deg", "i (°)", FIELD.I, "°"],
+  ["omega_deg", "ω (°)", FIELD.OMEGA, "°"],
+  ["Omega_deg", "Ω (°)", FIELD.NODE, "°"],
+  ["q_au", "q (AU)", FIELD.Q, "AU"],
+  ["log10_mass_to_area_kg_per_m2", "log₁₀(m/A) (kg·m⁻²)", FIELD.MASS_TO_AREA, "log₁₀(kg·m⁻²)", [-2, 0]],
 ];
 const FILTER_PARAMS = [
-  { key: "a_au", label: "a", field: FIELD.A, type: "range", min: 0, max: 100, step: 0.5, unit: "AU" },
+  { key: "a_au", label: "a (AU)", field: FIELD.A, type: "range", min: 0, max: 100, step: 0.5, unit: "AU" },
   { key: "e", label: "e", field: FIELD.E, type: "range", min: 0, max: 1, step: 0.01, unit: "" },
-  { key: "i_deg", label: "i", field: FIELD.I, type: "angle", min: 0, max: 180, center: 90, extent: 180, step: 1, unit: "deg", wrap: false },
-  { key: "omega_deg", label: "omega", field: FIELD.OMEGA, type: "angle", min: 0, max: 360, center: 180, extent: 360, step: 1, unit: "deg", wrap: true },
-  { key: "Omega_deg", label: "Omega", field: FIELD.NODE, type: "angle", min: 0, max: 360, center: 180, extent: 360, step: 1, unit: "deg", wrap: true },
-  { key: "q_au", label: "q", field: FIELD.Q, type: "range", min: 0, max: 100, step: 0.5, unit: "AU" },
+  { key: "i_deg", label: "i (°)", field: FIELD.I, type: "angle", min: 0, max: 180, center: 90, extent: 180, step: 1, unit: "°", wrap: false },
+  { key: "omega_deg", label: "ω (°)", field: FIELD.OMEGA, type: "angle", min: 0, max: 360, center: 180, extent: 360, step: 1, unit: "°", wrap: true },
+  { key: "Omega_deg", label: "Ω (°)", field: FIELD.NODE, type: "angle", min: 0, max: 360, center: 180, extent: 360, step: 1, unit: "°", wrap: true },
+  { key: "q_au", label: "q (AU)", field: FIELD.Q, type: "range", min: 0, max: 100, step: 0.5, unit: "AU" },
 ];
 
 const canvas = document.querySelector("#scene");
+const panelEl = document.querySelector(".panel");
 const statusEl = document.querySelector("#status");
 const countEl = document.querySelector("#count");
 const colorParamEl = document.querySelector("#colorParam");
@@ -43,9 +44,11 @@ const radiusEl = document.querySelector("#radius");
 const randomizeMeanAnomalyEl = document.querySelector("#randomizeMeanAnomaly");
 const showEarthOrbitBlipsEl = document.querySelector("#showEarthOrbitBlips");
 const filterControlsEl = document.querySelector("#filterControls");
+const showerPresetEl = document.querySelector("#showerPreset");
 const playPauseEl = document.querySelector("#playPause");
 const resetViewEl = document.querySelector("#resetView");
 const musicToggleEl = document.querySelector("#musicToggle");
+const compactToggleEl = document.querySelector("#compactToggle");
 const timeReadoutEl = document.querySelector("#timeReadout");
 const axisReadoutEl = document.querySelector("#axisReadout");
 const rangeReadoutEl = document.querySelector("#rangeReadout");
@@ -54,7 +57,7 @@ const drawnCountEl = document.querySelector("#drawnCount");
 const legendMinEl = document.querySelector("#legendMin");
 const legendMaxEl = document.querySelector("#legendMax");
 const sliderReadouts = [
-  { el: speedEl, valueEl: document.querySelector("#speedValue"), unit: "d/s", decimals: 0 },
+  { el: speedEl, valueEl: document.querySelector("#speedValue"), unit: "d·s⁻¹", decimals: 0 },
   { el: trailEl, valueEl: document.querySelector("#trailValue"), unit: "d", decimals: 0 },
   { el: cycleDaysEl, valueEl: document.querySelector("#cycleDaysValue"), unit: "d", decimals: 0 },
   { el: drawLimitEl, valueEl: document.querySelector("#drawLimitValue"), unit: "", decimals: 0 },
@@ -304,7 +307,7 @@ function lookAt(eye, center, up) {
 
 function matrices() {
   const axisLimit = Number(radiusEl.value);
-  camera.distance = Math.max(camera.distance, axisLimit * 0.25);
+  camera.distance = Math.max(camera.distance, Math.max(0.08, axisLimit * 0.01));
   const cp = Math.cos(camera.pitch);
   const eye = [
     camera.distance * cp * Math.cos(camera.yaw),
@@ -342,11 +345,27 @@ function percentile(values, q) {
   return finite[Math.floor(q * (finite.length - 1))];
 }
 
+function unitHtml(unit) {
+  return String(unit)
+    .replace(/\^(-?\d+)/g, "<sup>$1</sup>")
+    .replace(/⁻/g, "<sup>-")
+    .replace(/¹/g, "1</sup>")
+    .replace(/²/g, "2</sup>")
+    .replace(/³/g, "3</sup>");
+}
+
 function formatValue(value, unit) {
   if (!Number.isFinite(value)) return "-";
   const abs = Math.abs(value);
   const text = abs >= 1000 || abs < 0.01 ? value.toExponential(2) : value.toFixed(abs >= 100 ? 0 : abs >= 10 ? 1 : 2);
   return unit ? `${text} ${unit}` : text;
+}
+
+function formatValueHtml(value, unit) {
+  if (!Number.isFinite(value)) return "-";
+  const abs = Math.abs(value);
+  const text = abs >= 1000 || abs < 0.01 ? value.toExponential(2) : value.toFixed(abs >= 100 ? 0 : abs >= 10 ? 1 : 2);
+  return unit ? `${text} ${unitHtml(unit)}` : text;
 }
 
 function formatSliderValue(item) {
@@ -406,8 +425,17 @@ function passesFilters(row) {
 }
 
 function displayFilterValue(value, unit) {
-  const decimals = unit === "AU" || unit === "km/s" ? 1 : unit === "" ? 2 : 0;
+  const decimals = unit === "AU" || unit === "km·s⁻¹" ? 1 : unit === "" ? 2 : 0;
   return `${Number(value).toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
+}
+
+function finiteOr(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function defaultFilterRange(param) {
+  return param.type === "angle" ? { center: param.center, extent: param.extent } : { min: param.min, max: param.max };
 }
 
 function updateFilterReadout(param) {
@@ -421,18 +449,65 @@ function updateFilterReadout(param) {
   }
 }
 
-function setFilterValue(param, side, value) {
+function syncFilterInputs(param) {
   const range = filters.get(param.key);
-  range[side] = Number(value);
-  if (param.type === "range" && range.min > range.max) {
-    if (side === "min") range.max = range.min;
-    else range.min = range.max;
-  }
   for (const key of Object.keys(range)) {
     const el = document.querySelector(`[data-filter="${param.key}"][data-side="${key}"]`);
     if (el) el.value = range[key];
   }
   updateFilterReadout(param);
+}
+
+function setFilterValue(param, side, value) {
+  const range = filters.get(param.key);
+  range[side] = finiteOr(value, range[side]);
+  if (param.type === "range" && range.min > range.max) {
+    if (side === "min") range.max = range.min;
+    else range.min = range.max;
+  }
+  syncFilterInputs(param);
+}
+
+function setFilterRange(param, presetRange) {
+  const range = defaultFilterRange(param);
+  if (!presetRange) {
+    filters.set(param.key, range);
+    syncFilterInputs(param);
+    return;
+  }
+  if (param.type === "angle") {
+    const center = Number(presetRange.center);
+    const extent = Number(presetRange.extent);
+    if (Number.isFinite(center) && Number.isFinite(extent)) {
+      range.center = Math.max(param.min, Math.min(param.max, center));
+      range.extent = Math.max(0, Math.min(param.max - param.min, extent));
+    }
+  } else {
+    const min = Number(presetRange.min);
+    const max = Number(presetRange.max);
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      range.min = Math.max(param.min, Math.min(param.max, min));
+      range.max = Math.max(param.min, Math.min(param.max, max));
+      if (range.min > range.max) [range.min, range.max] = [range.max, range.min];
+    }
+  }
+  filters.set(param.key, range);
+  syncFilterInputs(param);
+}
+
+function applyShowerPreset(presetId) {
+  const preset = (window.METEOR_SHOWER_PRESETS || []).find((item) => item.id === presetId);
+  for (const param of FILTER_PARAMS) setFilterRange(param, null);
+  if (!preset) {
+    colorParamEl.value = "i_deg";
+    updateColors();
+  } else {
+    colorParamEl.value = "log10_mass_to_area_kg_per_m2";
+    updateColors();
+    const presetFilters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
+    for (const param of FILTER_PARAMS) setFilterRange(param, presetFilters[param.key]);
+  }
+  lastFilterSignature = "";
 }
 
 function filterSignature(maxRadius) {
@@ -654,6 +729,13 @@ function togglePlanetariumMusic() {
   else startPlanetariumMusic();
 }
 
+function setControlsCompact(compact) {
+  panelEl.classList.toggle("compact", compact);
+  compactToggleEl.textContent = compact ? "▸" : "▾";
+  compactToggleEl.setAttribute("aria-expanded", String(!compact));
+  compactToggleEl.setAttribute("aria-label", compact ? "Expand controls" : "Compact controls");
+}
+
 function planetElements(planet) {
   return {
     a: planet.a,
@@ -746,9 +828,9 @@ function updateColors() {
     const c = turbo((v - colorRange[0]) / (colorRange[1] - colorRange[0]));
     meteorColors.set(c, i * 3);
   }
-  legendMinEl.textContent = formatValue(colorRange[0], param[3]);
-  legendMaxEl.textContent = formatValue(colorRange[1], param[3]);
-  rangeReadoutEl.textContent = `${formatValue(colorRange[0], param[3])} - ${formatValue(colorRange[1], param[3])}`;
+  legendMinEl.innerHTML = formatValueHtml(colorRange[0], param[3]);
+  legendMaxEl.innerHTML = formatValueHtml(colorRange[1], param[3]);
+  rangeReadoutEl.innerHTML = `${formatValueHtml(colorRange[0], param[3])} - ${formatValueHtml(colorRange[1], param[3])}`;
 }
 
 function colorForRecord(record) {
@@ -1145,6 +1227,17 @@ function setupControls() {
   }
   colorParamEl.value = metadata.defaultColorParameter || "i_deg";
   colorParamEl.addEventListener("change", updateColors);
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "All meteors";
+  showerPresetEl.append(allOption);
+  for (const preset of window.METEOR_SHOWER_PRESETS || []) {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = `${preset.label} (${preset.solutions})`;
+    showerPresetEl.append(option);
+  }
+  showerPresetEl.addEventListener("change", () => applyShowerPreset(showerPresetEl.value));
   for (const param of FILTER_PARAMS) {
     const range = param.type === "angle" ? { center: param.center, extent: param.extent } : { min: param.min, max: param.max };
     filters.set(param.key, range);
@@ -1186,11 +1279,12 @@ function setupControls() {
     camera.yaw = 0.78;
     camera.pitch = 0.36;
     camera.roll = 0;
-    camera.distance = Math.max(10, Number(radiusEl.value) * 1.8);
+    camera.distance = Math.max(0.5, Number(radiusEl.value) * 1.8);
   });
   randomizeMeanAnomalyEl.addEventListener("input", () => {
     lastFilterSignature = "";
   });
+  compactToggleEl.addEventListener("click", () => setControlsCompact(!panelEl.classList.contains("compact")));
   musicToggleEl.addEventListener("click", togglePlanetariumMusic);
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   canvas.addEventListener("pointerdown", (event) => {
@@ -1221,7 +1315,7 @@ function setupControls() {
     "wheel",
     (event) => {
       event.preventDefault();
-      camera.distance = Math.max(1.2, Math.min(300, camera.distance * Math.exp(event.deltaY * 0.001)));
+      camera.distance = Math.max(0.08, Math.min(300, camera.distance * Math.exp(event.deltaY * 0.001)));
     },
     { passive: false }
   );

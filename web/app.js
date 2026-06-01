@@ -69,6 +69,7 @@ const sliderReadouts = [
 
 const DEG = Math.PI / 180;
 const MU = 0.00029592115654562346;
+const DEFAULT_AXIS_LIMIT_AU = 85;
 
 let gl;
 let program;
@@ -438,6 +439,38 @@ function defaultFilterRange(param) {
   return param.type === "angle" ? { center: param.center, extent: param.extent } : { min: param.min, max: param.max };
 }
 
+function finiteNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function setAxisLimit(value, fitCamera = false) {
+  const min = Number(radiusEl.min);
+  const max = Number(radiusEl.max);
+  const requested = Number(value);
+  const axisLimit = Number.isFinite(requested) ? Math.max(min, Math.min(max, Math.round(requested))) : DEFAULT_AXIS_LIMIT_AU;
+  radiusEl.value = axisLimit;
+  updateSliderReadouts();
+  if (fitCamera) camera.distance = Math.max(0.5, axisLimit * 1.35);
+}
+
+function axisLimitForPreset(preset) {
+  const presetFilters = preset && preset.filters && typeof preset.filters === "object" ? preset.filters : {};
+  const aMax = finiteNumber(presetFilters.a_au && presetFilters.a_au.max);
+  const eMax = finiteNumber(presetFilters.e && presetFilters.e.max);
+  const qMax = finiteNumber(presetFilters.q_au && presetFilters.q_au.max);
+  const candidates = [];
+
+  if (aMax !== null && eMax !== null) candidates.push(Math.abs(aMax) * (1 + Math.max(0, Math.min(1, eMax))));
+  if (aMax !== null) candidates.push(Math.abs(aMax) * 1.3);
+  if (qMax !== null) candidates.push(qMax * 3);
+  if (qMax !== null && eMax !== null && eMax < 0.985) candidates.push((qMax * (1 + eMax)) / Math.max(0.015, 1 - eMax));
+
+  const outerDistance = Math.max(...candidates.filter((candidate) => Number.isFinite(candidate) && candidate > 0));
+  if (!Number.isFinite(outerDistance)) return DEFAULT_AXIS_LIMIT_AU;
+  return Math.max(4, Math.min(100, outerDistance * 1.18));
+}
+
 function updateFilterReadout(param) {
   const range = filters.get(param.key);
   const valueEl = document.querySelector(`[data-filter-value="${param.key}"]`);
@@ -501,11 +534,13 @@ function applyShowerPreset(presetId) {
   if (!preset) {
     colorParamEl.value = "i_deg";
     updateColors();
+    setAxisLimit(DEFAULT_AXIS_LIMIT_AU, true);
   } else {
     colorParamEl.value = "log10_mass_to_area_kg_per_m2";
     updateColors();
     const presetFilters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
     for (const param of FILTER_PARAMS) setFilterRange(param, presetFilters[param.key]);
+    setAxisLimit(axisLimitForPreset(preset), true);
   }
   lastFilterSignature = "";
 }

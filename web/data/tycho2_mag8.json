@@ -1,0 +1,30 @@
+{
+  "source": "/home/j/src/widefield-star-calibrator/data/tycho2_mag8.bin.gz",
+  "count": 42072,
+  "recordFloat32Count": 3,
+  "fields": [
+    "ra_hours",
+    "dec_deg",
+    "vt_mag"
+  ],
+  "selection": "merged Tycho-2 main catalogue plus supplement-1 and supplement-2, filtered to V_T < maxMagnitudeExclusive",
+  "maxMagnitudeExclusive": 8,
+  "format": {
+    "container": "gzip-compressed byte stream",
+    "payloadMagic": "WISCAT1\\0",
+    "byteOrder": "little-endian",
+    "integerEncoding": "unsigned 32-bit little-endian",
+    "floatEncoding": "IEEE-754 binary32 little-endian",
+    "headerBytes": 16,
+    "header": [
+      "bytes 0..7: ASCII magic WISCAT1\\0",
+      "bytes 8..11: uint32 star count",
+      "bytes 12..15: uint32 float stride, currently 3"
+    ],
+    "record": [
+      "float32 right ascension in hours, ICRS/J2000",
+      "float32 declination in degrees, ICRS/J2000",
+      "float32 Tycho V_T magnitude"
+    ]
+  }
+}

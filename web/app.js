@@ -509,8 +509,14 @@ function setFilterRange(param, presetRange) {
     return;
   }
   if (param.type === "angle") {
-    const center = Number(presetRange.center);
-    const extent = Number(presetRange.extent);
+    let center = Number(presetRange.center);
+    let extent = Number(presetRange.extent);
+    const min = Number(presetRange.min);
+    const max = Number(presetRange.max);
+    if ((!Number.isFinite(center) || !Number.isFinite(extent)) && Number.isFinite(min) && Number.isFinite(max)) {
+      center = (min + max) * 0.5;
+      extent = Math.abs(max - min);
+    }
     if (Number.isFinite(center) && Number.isFinite(extent)) {
       range.center = Math.max(param.min, Math.min(param.max, center));
       range.extent = Math.max(0, Math.min(param.max - param.min, extent));

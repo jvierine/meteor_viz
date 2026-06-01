@@ -84,6 +84,8 @@ let planetOrbitPositionBuffer;
 let planetOrbitColorBuffer;
 let parentOrbitPositionBuffer;
 let parentOrbitColorBuffer;
+let parentPointPositionBuffer;
+let parentPointColorBuffer;
 let planetPointPositionBuffer;
 let planetPointColorBuffer;
 let sunPointPositionBuffer;
@@ -113,6 +115,8 @@ let planetOrbitPositions;
 let planetOrbitColors;
 let parentOrbitPositions;
 let parentOrbitColors;
+let parentPointPositions;
+let parentPointColors;
 let planetPointPositions;
 let planetPointColors;
 let sunPointPositions;
@@ -130,6 +134,8 @@ let blipPointCount = 0;
 let planetOrbitVertexCount = 0;
 let parentOrbitVertexCapacity = 0;
 let parentOrbitDrawVertexCount = 0;
+let parentPointCapacity = 0;
+let parentPointDrawCount = 0;
 let planetPointCount = 0;
 let guideLineVertexCount = 0;
 let guidePointStart = 0;
@@ -1096,6 +1102,8 @@ function rebuildGeometry() {
   ];
   let pop = 0;
   let poc = 0;
+  let ppp = 0;
+  let ppc = 0;
   for (let parentIndex = 0; parentIndex < activeParentBodies.length; parentIndex++) {
     const body = activeParentBodies[parentIndex];
     const elements = parentBodyElements(body);
@@ -1113,8 +1121,16 @@ function rebuildGeometry() {
       parentOrbitColors.set([...orbitColor, show ? 1.0 : 0], poc + 4);
       poc += 8;
     }
+    const meanMotion = Math.sqrt(MU / (elements.a * elements.a * elements.a));
+    const cur = positionFromElements(elements, elements.mean0 + meanMotion * planetDay);
+    const showParent = Math.hypot(...cur) <= maxRadius;
+    parentPointPositions.set(showParent ? cur : [far, far, far], ppp);
+    parentPointColors.set([1, 1, 1, showParent ? 1.0 : 0], ppc);
+    ppp += 3;
+    ppc += 4;
   }
   parentOrbitDrawVertexCount = activeParentBodies.length * PARENT_ORBIT_STEPS * 2;
+  parentPointDrawCount = activeParentBodies.length;
 
   gl.bindBuffer(gl.ARRAY_BUFFER, trailPositionBuffer);
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, trailPositions);
@@ -1132,6 +1148,10 @@ function rebuildGeometry() {
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, parentOrbitPositions);
   gl.bindBuffer(gl.ARRAY_BUFFER, parentOrbitColorBuffer);
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, parentOrbitColors);
+  gl.bindBuffer(gl.ARRAY_BUFFER, parentPointPositionBuffer);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, parentPointPositions);
+  gl.bindBuffer(gl.ARRAY_BUFFER, parentPointColorBuffer);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, parentPointColors);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetPointPositionBuffer);
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, planetPointPositions);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetPointColorBuffer);
@@ -1240,6 +1260,11 @@ function render(nowMs) {
   gl.uniform1f(gl.getUniformLocation(program, "uPointSize"), Number(planetSizeEl.value) * (window.devicePixelRatio || 1));
   gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 1);
   gl.drawArrays(gl.POINTS, 0, planetPointCount);
+
+  bindBuffers(parentPointPositionBuffer, parentPointColorBuffer);
+  gl.uniform1f(gl.getUniformLocation(program, "uPointSize"), Math.max(7, Number(planetSizeEl.value) * 1.4) * (window.devicePixelRatio || 1));
+  gl.uniform1i(gl.getUniformLocation(program, "uPointMode"), 1);
+  gl.drawArrays(gl.POINTS, 0, parentPointDrawCount);
   gl.enable(gl.DEPTH_TEST);
   gl.depthMask(true);
   requestAnimationFrame(render);
@@ -1250,6 +1275,7 @@ function setupBuffers() {
   planetOrbitVertexCount = PLANETS.length * PLANET_ORBIT_STEPS * 2;
   parentOrbitVertexCapacity =
     Math.max(1, ...Object.values(window.PARENT_BODY_ORBITS?.byShower || {}).map((items) => items.length)) * PARENT_ORBIT_STEPS * 2;
+  parentPointCapacity = Math.max(1, ...Object.values(window.PARENT_BODY_ORBITS?.byShower || {}).map((items) => items.length));
   planetPointCount = PLANETS.length;
   trailPositions = new Float32Array(trailVertexCount * 3);
   trailColors = new Float32Array(trailVertexCount * 4);
@@ -1259,6 +1285,8 @@ function setupBuffers() {
   planetOrbitColors = new Float32Array(planetOrbitVertexCount * 4);
   parentOrbitPositions = new Float32Array(parentOrbitVertexCapacity * 3);
   parentOrbitColors = new Float32Array(parentOrbitVertexCapacity * 4);
+  parentPointPositions = new Float32Array(parentPointCapacity * 3);
+  parentPointColors = new Float32Array(parentPointCapacity * 4);
   planetPointPositions = new Float32Array(planetPointCount * 3);
   planetPointColors = new Float32Array(planetPointCount * 4);
   sunPointPositions = new Float32Array([0, 0, 0]);
@@ -1271,6 +1299,8 @@ function setupBuffers() {
   planetOrbitColorBuffer = gl.createBuffer();
   parentOrbitPositionBuffer = gl.createBuffer();
   parentOrbitColorBuffer = gl.createBuffer();
+  parentPointPositionBuffer = gl.createBuffer();
+  parentPointColorBuffer = gl.createBuffer();
   planetPointPositionBuffer = gl.createBuffer();
   planetPointColorBuffer = gl.createBuffer();
   sunPointPositionBuffer = gl.createBuffer();
@@ -1291,6 +1321,10 @@ function setupBuffers() {
   gl.bufferData(gl.ARRAY_BUFFER, parentOrbitPositions.byteLength, gl.DYNAMIC_DRAW);
   gl.bindBuffer(gl.ARRAY_BUFFER, parentOrbitColorBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, parentOrbitColors.byteLength, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, parentPointPositionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, parentPointPositions.byteLength, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, parentPointColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, parentPointColors.byteLength, gl.DYNAMIC_DRAW);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetPointPositionBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, planetPointPositions.byteLength, gl.DYNAMIC_DRAW);
   gl.bindBuffer(gl.ARRAY_BUFFER, planetPointColorBuffer);

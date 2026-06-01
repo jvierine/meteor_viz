@@ -9,7 +9,7 @@ echo measurements from 2016-2026.
 
 # Example
 
-https://github.com/egavazzi/meteor_viz/assets/98973824/5ec1305d-81f4-483c-aacf-a4d9d0440a55
+![MAARSY meteor orbit visualizer showing the Geminids](docs/meteor-viz-screenshot.png)
 
 # JavaScript Web Visualizer
 

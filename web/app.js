@@ -49,6 +49,7 @@ const playPauseEl = document.querySelector("#playPause");
 const resetViewEl = document.querySelector("#resetView");
 const musicToggleEl = document.querySelector("#musicToggle");
 const compactToggleEl = document.querySelector("#compactToggle");
+const utcDateTimeEl = document.querySelector("#utcDateTime");
 const timeReadoutEl = document.querySelector("#timeReadout");
 const axisReadoutEl = document.querySelector("#axisReadout");
 const rangeReadoutEl = document.querySelector("#rangeReadout");
@@ -392,6 +393,23 @@ function formatSliderValue(item) {
   return item.unit ? `${text} ${item.unit}` : text;
 }
 
+function padDatePart(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatUtcDateTime(dayOffset) {
+  const epochSecond = (metadata?.epochUnixSecond0 || J2000_UNIX_SECOND) + dayOffset * 86400;
+  const date = new Date(epochSecond * 1000);
+  if (Number.isNaN(date.getTime())) return "- UTC";
+  const year = date.getUTCFullYear();
+  const month = padDatePart(date.getUTCMonth() + 1);
+  const day = padDatePart(date.getUTCDate());
+  const hour = padDatePart(date.getUTCHours());
+  const minute = padDatePart(date.getUTCMinutes());
+  const second = padDatePart(date.getUTCSeconds());
+  return `${year}-${month}-${day} ${hour}:${minute}:${second} UTC`;
+}
+
 function updateSliderReadouts() {
   for (const item of sliderReadouts) {
     if (item.valueEl) item.valueEl.textContent = formatSliderValue(item);
@@ -601,15 +619,25 @@ function randomCandidate() {
   return index;
 }
 
+function meteorFromRecord(record, forceRandomMeanAnomaly = false) {
+  return {
+    record: record.slice ? record.slice() : new Float32Array(record),
+    meanAnomalyOffset: forceRandomMeanAnomaly || randomizeMeanAnomalyEl.checked ? Math.random() * Math.PI * 2 : 0,
+  };
+}
+
 function sampledMeteorFromCurrentChunk() {
   const index = randomCandidate();
   if (index == null) return null;
   const row = index * stride;
-  const record = dataTable.slice(row, row + stride);
-  return {
-    record,
-    meanAnomalyOffset: randomizeMeanAnomalyEl.checked ? Math.random() * Math.PI * 2 : 0,
-  };
+  return meteorFromRecord(dataTable.slice(row, row + stride));
+}
+
+function duplicatedMeteorFromActiveSlots(excludedSlot = null) {
+  const sourceSlots = activeSlots.length > 1 ? activeSlots.filter((slot) => slot !== excludedSlot) : activeSlots;
+  if (!sourceSlots.length) return null;
+  const source = sourceSlots[Math.floor(Math.random() * sourceSlots.length)];
+  return meteorFromRecord(source.meteor.record, true);
 }
 
 function rebuildCandidatePool(maxRadius) {
@@ -636,6 +664,22 @@ function fillActiveSlotsFromCurrentChunk(meanDays, startedAt) {
   }
 }
 
+function duplicateActiveSlotsToDrawCount(meanDays, startedAt) {
+  const drawCount = desiredDrawCount();
+  if (!activeSlots.length) return 0;
+  const initialCount = activeSlots.length;
+  while (activeSlots.length < drawCount) {
+    const meteor = duplicatedMeteorFromActiveSlots();
+    if (!meteor) break;
+    activeSlots.push({
+      meteor,
+      startedAt,
+      expiresAt: animationTimeDay + exponentialLifetime(meanDays),
+    });
+  }
+  return activeSlots.length - initialCount;
+}
+
 async function searchChunksForMoreMeteors(meanDays, startedAt, generation) {
   if (chunkSearchPromise) return chunkSearchPromise;
   chunkSearchPromise = (async () => {
@@ -647,11 +691,15 @@ async function searchChunksForMoreMeteors(meanDays, startedAt, generation) {
       fillActiveSlotsFromCurrentChunk(meanDays, startedAt);
     }
     if (generation === chunkSearchGeneration) {
+      duplicateActiveSlotsToDrawCount(meanDays, startedAt);
       const count = activeSlots.length.toLocaleString();
       const requested = desiredDrawCount().toLocaleString();
+      const found = matchingMeteorCount.toLocaleString();
       statusEl.textContent =
         activeSlots.length < desiredDrawCount()
           ? `Found ${count} meteoroids matching the current filters across all chunks.`
+          : matchingMeteorCount < desiredDrawCount()
+          ? `Found ${found} matching meteoroids; showing ${count} by spreading copies along their orbits.`
           : `Showing ${count} filtered meteoroids from streamed chunks.`;
     }
   })().finally(() => {
@@ -683,6 +731,14 @@ function updateActiveSlots(meanDays) {
     if (animationTimeDay >= slot.expiresAt) {
       const meteor = sampledMeteorFromCurrentChunk();
       if (!meteor) {
+        if (chunksSearchedForFilter >= metadata.chunks.length) {
+          const duplicate = duplicatedMeteorFromActiveSlots(slot);
+          if (duplicate) {
+            slot.meteor = duplicate;
+            slot.startedAt = animationTimeDay;
+            slot.expiresAt = animationTimeDay + exponentialLifetime(meanDays);
+          }
+        }
         requestMoreMatchingMeteors(meanDays, animationTimeDay);
         continue;
       }
@@ -691,7 +747,10 @@ function updateActiveSlots(meanDays) {
       slot.expiresAt = animationTimeDay + exponentialLifetime(meanDays);
     }
   }
-  if (activeSlots.length < drawCount) requestMoreMatchingMeteors(meanDays, animationTimeDay);
+  if (activeSlots.length < drawCount) {
+    if (chunksSearchedForFilter >= metadata.chunks.length) duplicateActiveSlotsToDrawCount(meanDays, animationTimeDay);
+    else requestMoreMatchingMeteors(meanDays, animationTimeDay);
+  }
 }
 
 function midiToHz(note) {
@@ -1021,7 +1080,10 @@ function rebuildGeometry() {
     chunksSearchedForFilter = chunkMeteorCount > 0 ? 1 : 0;
     rebuildCandidatePool(maxRadius);
     fillActiveSlotsFromCurrentChunk(meanLifetimeDays, animationTimeDay - Number(trailEl.value));
-    if (activeSlots.length < desiredDrawCount()) requestMoreMatchingMeteors(meanLifetimeDays, animationTimeDay);
+    if (activeSlots.length < desiredDrawCount()) {
+      if (chunksSearchedForFilter >= metadata.chunks.length) duplicateActiveSlotsToDrawCount(meanLifetimeDays, animationTimeDay - Number(trailEl.value));
+      else requestMoreMatchingMeteors(meanLifetimeDays, animationTimeDay);
+    }
     lastFilterSignature = signature;
   } else {
     updateActiveSlots(meanLifetimeDays);
@@ -1201,6 +1263,7 @@ function render(nowMs) {
   if (!paused) animationTimeDay += dt * Number(speedEl.value);
   axisReadoutEl.textContent = `${Number(radiusEl.value).toFixed(0)} AU`;
   timeReadoutEl.textContent = `${animationTimeDay.toFixed(1)} d`;
+  utcDateTimeEl.textContent = formatUtcDateTime(animationTimeDay);
 
   resize();
   rebuildGeometry();

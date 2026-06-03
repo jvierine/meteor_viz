@@ -150,19 +150,24 @@ h1 {
   background: #ffffff;
 }
 
-.top-audio-button {
+.utc-date-time {
   position: fixed;
-  top: 17px;
-  right: calc(18px + clamp(78px, 9vw, 126px) + 10px);
+  top: 16px;
+  left: 50%;
   z-index: 4;
-  opacity: 0.76;
-  transition: opacity 140ms ease, transform 140ms ease;
-}
-
-.top-audio-button:hover,
-.top-audio-button:focus-visible {
-  opacity: 1;
-  transform: translateY(-1px);
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+  background: rgba(10, 12, 15, 0.62);
+  color: rgba(244, 248, 252, 0.9);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 1px 5px #000;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 #status {
@@ -333,6 +338,19 @@ dd {
   text-align: right;
 }
 
+.audio-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #d8dde2;
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .legend {
   position: fixed;
   right: 18px;
@@ -373,13 +391,15 @@ dd {
     right: 12px;
   }
 
-  .top-audio-button {
-    top: 11px;
-    right: calc(12px + clamp(78px, 9vw, 126px) + 8px);
+  .utc-date-time {
+    top: 12px;
+    max-width: calc(100vw - 220px);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .panel {
-    top: 10px;
+    top: 44px;
     left: 10px;
     padding: 12px;
   }

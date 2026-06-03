@@ -1,0 +1,55 @@
+{
+  "source": "data/maarsy_dataset_jopek_dh_reduced.h5",
+  "group": "merge_factor_16",
+  "count": 99963,
+  "fields": [
+    "a_au",
+    "e",
+    "i_deg",
+    "omega_deg",
+    "Omega_deg",
+    "nu_deg",
+    "epoch_day",
+    "mass_to_area_kg_per_m2",
+    "n_members",
+    "q_au"
+  ],
+  "recordFloat32Count": 10,
+  "binary": "merge_factor_16.bin",
+  "epochUnixSecond0": 1599590950.836375,
+  "parameters": {
+    "a_au": [
+      0.0016058372723520586,
+      79789.03337867245
+    ],
+    "e": [
+      0.009861274600563059,
+      1068872.9109537837
+    ],
+    "i_deg": [
+      0.440247191651856,
+      179.48410367847794
+    ],
+    "omega_deg": [
+      0.0015322943002157364,
+      359.99865177745073
+    ],
+    "Omega_deg": [
+      0.006844134298889617,
+      359.9995986717447
+    ],
+    "q_au": [
+      1.4637792107450771e-06,
+      15066.437769269616
+    ],
+    "mass_to_area_kg_per_m2": [
+      0.002510096483413949,
+      0.9261074005577232
+    ],
+    "n_members": [
+      8.0,
+      16.0
+    ]
+  },
+  "defaultColorParameter": "i_deg"
+}

@@ -5,6 +5,8 @@ using ProgressMeter
 
 function plotfun()
 
+    fly_with_earth=false
+    
     ## Load the data
     # hid = h5open("../maarsy_meteors/daniel/results/combined_results.h5", "r")
     hid = h5open("combined_results.h5", "r")
@@ -99,9 +101,6 @@ function plotfun()
 
 
 
-
-
-
     ## Animate
     trajectory_length = 25 # how long the individual meteor orbit "traces" should be
     time_steps = 5 # size of the time jumps in the animation
@@ -112,6 +111,14 @@ function plotfun()
             isopen(fig.scene) || break  # exit if window is closed
             # Animate the planets
             planet_positions[] = massive_states[1:n_planets, i_t, 1:3]
+
+            if fly_with_earth == true
+                cc.eyeposition[] = massive_states[4,i_t,1:3]
+                # look at where we are going.
+                cc.lookat[] = massive_states[4,(i_t-2)%n_t,1:3]
+                update_cam!(ax.scene)
+            end
+
             # Animate the meteors
             for i in 1:n_meteors2plot
                 # Again some peculiar indexing. This is because we have those NaN buffers in

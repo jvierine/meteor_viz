@@ -12,9 +12,8 @@
     <a class="iap-logo" href="https://www.iap-kborn.de/" target="_blank" rel="noopener" aria-label="IAP Kuehlungsborn">
       <img src="./logo_en.svg" alt="">
     </a>
-    <button id="musicToggle" class="audio-button top-audio-button" type="button" aria-label="Play planetarium music" aria-pressed="false">
-      <span class="audio-icon" aria-hidden="true"></span>
-    </button>
+
+    <div id="utcDateTime" class="utc-date-time" aria-live="polite">- UTC</div>
 
     <aside class="panel">
       <header>
@@ -107,6 +106,13 @@
           <div><dt>Date offset</dt><dd id="timeReadout">0 d</dd></div>
           <div><dt>Color range</dt><dd id="rangeReadout">-</dd></div>
         </dl>
+
+        <div class="audio-control-row">
+          <span>Audio</span>
+          <button id="musicToggle" class="audio-button" type="button" aria-label="Play planetarium music" aria-pressed="false">
+            <span class="audio-icon" aria-hidden="true"></span>
+          </button>
+        </div>
       </div>
     </aside>
 

@@ -6,10 +6,17 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import sys
 from pathlib import Path
 
 import h5py
 import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from data_sources import MAARSY_DATASET_URL, ensure_file
 
 
 FIELDS = [
@@ -22,6 +29,8 @@ FIELDS = [
     "log10_mass_to_area_kg_per_m2",
 ]
 FLOAT16_MAX = np.finfo(np.float16).max
+DEFAULT_INPUT = ROOT / "data" / "maarsy_dataset.h5"
+DEFAULT_OUTPUT_DIR = ROOT / "web" / "data"
 
 
 def finite_range(values):
@@ -43,6 +52,7 @@ def export_chunks(input_path, output_dir, chunk_count, seed):
     input_path = Path(input_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    ensure_file(input_path, MAARSY_DATASET_URL, label="MAARSY HDF5 catalogue")
 
     with h5py.File(input_path, "r") as h:
         kepler = h["kepler"][()].astype(np.float32)
@@ -119,8 +129,8 @@ def export_chunks(input_path, output_dir, chunk_count, seed):
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", default="../data/maarsy_dataset.h5")
-    parser.add_argument("--output-dir", default="data")
+    parser.add_argument("--input", default=str(DEFAULT_INPUT))
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--chunks", type=int, default=20)
     parser.add_argument("--seed", type=int, default=20260601)
     return parser.parse_args()

@@ -20,6 +20,14 @@ render the background stars. The IAU Meteor Data Center meteor shower database
 is used for meteor shower definitions, and Minor Planet Center orbit catalogues
 are used for the orbital elements of meteor shower parent bodies.
 
+# Setup
+
+Install the small Python toolchain used by the export scripts:
+
+```sh
+python -m pip install -r requirements.txt
+```
+
 Open the single-file standalone page directly in a browser:
 
 ```sh
@@ -30,9 +38,42 @@ The GUI includes color selection, playback speed, trail length, alpha, point
 size, a 0 to 100 AU axis-limit slider, and filters for the displayed orbital
 parameters.
 
-Regenerate the embedded browser data after changing the reduced HDF5 file:
+# Data Sources
+
+Large or external catalog inputs are no longer committed to the repository.
+
+- `web/export_catalog_chunks.py` will automatically download `data/maarsy_dataset.h5` from Zenodo if it is missing.
+- `export_parent_bodies.py` will automatically download `data/NEA.txt` and `data/CometEls.txt` from the official MPC endpoints if they are missing.
+- `data/streamestablisheddata2026.txt` is kept in the repository because it is small and directly used by the web exports.
+- `embed_tycho_catalog.py` expects a locally prepared `tycho2_mag8.bin.gz` and `tycho2_mag8.json` derived from the ESA Tycho-2 catalogue. The upstream Tycho-2 catalog is published by ESA at `https://www.cosmos.esa.int/web/hipparcos/tycho-2`.
+
+The full MAARSY HDF5 source is published on Zenodo:
+
+```text
+https://zenodo.org/records/17139689/files/maarsy_dataset.h5?download=1
+```
+
+If a browser is already downloading `data/maarsy_dataset.h5`, the export script will not start a second download while the partial `.crdownload` file is present.
+
+# Regeneration
+
+Regenerate the streamed web catalogue:
+
+```sh
+python web/export_catalog_chunks.py
+```
+
+Regenerate the reduced standalone export:
 
 ```sh
 python export_web_data.py
 python build_standalone.py
 ```
+
+Regenerate the parent-body overlay:
+
+```sh
+python export_parent_bodies.py
+```
+
+If you need the reduced standalone export, `export_web_data.py` expects a reduced HDF5 prepared outside this repository. When that file is missing, the script prints the Zenodo source URL and explains that the raw `data/maarsy_dataset.h5` download is not the same thing as the reduced input it needs.

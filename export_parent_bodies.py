@@ -10,6 +10,15 @@ import math
 import re
 from pathlib import Path
 
+from data_sources import IAU_STREAMS_URL, MPC_COMET_ELS_URL, MPC_NEA_URL, ensure_file
+
+
+ROOT = Path(__file__).resolve().parent
+DEFAULT_STREAMS = ROOT / "data" / "streamestablisheddata2026.txt"
+DEFAULT_NEA = ROOT / "data" / "NEA.txt"
+DEFAULT_COMETS = ROOT / "data" / "CometEls.txt"
+DEFAULT_OUTPUT = ROOT / "web" / "data" / "parent_body_orbits.js"
+
 
 def clean_name(value: str) -> str:
     return " ".join(value.replace("\x00", " ").split())
@@ -134,6 +143,10 @@ def parse_shower_parents(path: Path) -> dict[str, list[str]]:
 
 
 def export_parent_bodies(stream_path: Path, nea_path: Path, comet_path: Path, output_path: Path) -> tuple[int, int]:
+    ensure_file(stream_path, IAU_STREAMS_URL, label="IAU meteor shower catalog")
+    ensure_file(nea_path, MPC_NEA_URL, label="MPC NEA orbit catalog")
+    ensure_file(comet_path, MPC_COMET_ELS_URL, label="MPC comet orbit catalog")
+
     object_index: dict[str, dict] = {}
     object_index.update(parse_comets(comet_path))
     object_index.update(parse_nea(nea_path))
@@ -180,11 +193,16 @@ def export_parent_bodies(stream_path: Path, nea_path: Path, comet_path: Path, ou
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--streams", default="data/streamestablisheddata2026.txt")
-    parser.add_argument("--nea", default="data/NEA.txt")
-    parser.add_argument("--comets", default="data/CometEls.txt")
-    parser.add_argument("--output", default="web/data/parent_body_orbits.js")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Export meteor-shower parent bodies. Missing input catalogs are fetched "
+            "from the IAU Meteor Data Center and the Minor Planet Center."
+        )
+    )
+    parser.add_argument("--streams", default=str(DEFAULT_STREAMS))
+    parser.add_argument("--nea", default=str(DEFAULT_NEA))
+    parser.add_argument("--comets", default=str(DEFAULT_COMETS))
+    parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     args = parser.parse_args()
     body_count, link_count = export_parent_bodies(Path(args.streams), Path(args.nea), Path(args.comets), Path(args.output))
     print(f"wrote {args.output} with {body_count} parent bodies and {link_count} shower links")

@@ -3,13 +3,12 @@ using GLMakie
 using HDF5
 using ProgressMeter
 
-function plotfun()
+function plotfun(input_path = joinpath(@__DIR__, "data", "maarsy_dataset.h5"))
 
     fly_with_earth=false
     
     ## Load the data
-    # hid = h5open("../maarsy_meteors/daniel/results/combined_results.h5", "r")
-    hid = h5open("combined_results.h5", "r")
+    hid = h5open(input_path, "r")
     # Load velocities
     velocity = read(hid["vels"])
     velocity[velocity .> 70000] .= 70000 # clip the high velocities
@@ -161,4 +160,4 @@ end
 
 
 
-plotfun()
+plotfun(isempty(ARGS) ? joinpath(@__DIR__, "data", "maarsy_dataset.h5") : ARGS[1])

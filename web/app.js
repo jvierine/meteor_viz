@@ -101,6 +101,7 @@ let meteorCount = 0;
 let chunkMeteorCount = 0;
 let activeChunkIndex = -1;
 let nextChunkIndex = 0;
+let embeddedCatalogPayload = null;
 let chunkSearchPromise = null;
 let chunkSearchGeneration = 0;
 let chunksSearchedForFilter = 0;
@@ -1591,6 +1592,16 @@ async function loadCatalogChunk(index, options = {}) {
   const updateStatus = options.updateStatus !== false;
   const chunk = metadata.chunks[index];
   if (updateStatus) statusEl.textContent = `Loading catalogue chunk ${index + 1} / ${metadata.chunks.length}...`;
+  if (embeddedCatalogPayload) {
+    dataTable = embeddedCatalogPayload;
+    chunkMeteorCount = chunk.count;
+    activeChunkIndex = index;
+    nextChunkIndex = index;
+    if (updateStatus) lastFilterSignature = "";
+    updateColors();
+    if (updateStatus) statusEl.textContent = `Loaded embedded catalogue with ${meteorCount.toLocaleString()} meteoroids.`;
+    return;
+  }
   const payload = await loadChunkScript(index);
   const bytes = bytesFromBase64(payload.base64Float16);
   const table = decodeFloat16Table(bytes.buffer);
@@ -1605,11 +1616,7 @@ async function loadCatalogChunk(index, options = {}) {
 }
 
 async function loadData() {
-  if (!window.METEOR_VIZ_CATALOG) throw new Error("Meteor catalogue manifest is missing");
   if (!window.TYCHO_STAR_CATALOG) throw new Error("Embedded Tycho star catalogue is missing");
-  metadata = window.METEOR_VIZ_CATALOG;
-  stride = metadata.recordFloat32Count;
-  meteorCount = metadata.count;
 
   starMetadata = window.TYCHO_STAR_CATALOG.metadata;
   const starBinary = atob(window.TYCHO_STAR_CATALOG.base64Float32);
@@ -1618,6 +1625,30 @@ async function loadData() {
   starTable = new Float32Array(starBytes.buffer);
   if (starTable.length !== starMetadata.count * starMetadata.recordFloat32Count) throw new Error("Tycho data length does not match metadata");
 
+  if (window.METEOR_VIZ_CATALOG) {
+    metadata = window.METEOR_VIZ_CATALOG;
+    stride = metadata.recordFloat16Count || metadata.recordFloat32Count;
+    meteorCount = metadata.count;
+    await loadCatalogChunk(0);
+    return;
+  }
+
+  if (!window.METEOR_VIZ_EMBEDDED_DATA) throw new Error("Meteor catalogue manifest is missing");
+  metadata = window.METEOR_VIZ_EMBEDDED_DATA.metadata;
+  stride = metadata.recordFloat16Count || metadata.recordFloat32Count;
+  meteorCount = metadata.count;
+  metadata.chunks = [{ id: 0, count: meteorCount }];
+
+  if (window.METEOR_VIZ_EMBEDDED_DATA.base64Float16) {
+    const bytes = bytesFromBase64(window.METEOR_VIZ_EMBEDDED_DATA.base64Float16);
+    embeddedCatalogPayload = decodeFloat16Table(bytes.buffer);
+  } else {
+    const binary = atob(window.METEOR_VIZ_EMBEDDED_DATA.base64Float32);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    embeddedCatalogPayload = new Float32Array(bytes.buffer);
+  }
+  if (embeddedCatalogPayload.length !== meteorCount * stride) throw new Error("Embedded meteor data length does not match metadata");
   await loadCatalogChunk(0);
 }
 

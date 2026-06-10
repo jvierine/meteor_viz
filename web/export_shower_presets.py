@@ -7,8 +7,15 @@ import argparse
 import csv
 import json
 import math
+import sys
 from collections import defaultdict
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from data_sources import IAU_STREAMS_URL, ensure_file
 
 
 def number(text):
@@ -61,8 +68,12 @@ def range_span(values, padding, floor, ceiling):
 
 
 def export_presets(input_path, output_path):
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    ensure_file(input_path, IAU_STREAMS_URL, label="IAU meteor shower catalog")
+
     groups = defaultdict(list)
-    with Path(input_path).open(errors="replace", newline="") as handle:
+    with input_path.open(errors="replace", newline="") as handle:
         for line in handle:
             if not line.startswith('"'):
                 continue
@@ -113,7 +124,6 @@ def export_presets(input_path, output_path):
         )
 
     presets.sort(key=lambda item: (item["code"], item["name"]))
-    output_path = Path(output_path)
     output_path.write_text(
         "window.METEOR_SHOWER_PRESETS = "
         + json.dumps(presets, separators=(",", ":"), allow_nan=False)
@@ -124,8 +134,8 @@ def export_presets(input_path, output_path):
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", default="../data/streamestablisheddata2026.txt")
-    parser.add_argument("--output", default="data/meteor_shower_presets.js")
+    parser.add_argument("--input", default=str(ROOT / "data" / "streamestablisheddata2026.txt"))
+    parser.add_argument("--output", default=str(ROOT / "web" / "data" / "meteor_shower_presets.js"))
     return parser.parse_args()
 
 

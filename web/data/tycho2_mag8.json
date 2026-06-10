@@ -1,5 +1,5 @@
 {
-  "source": "/home/j/src/widefield-star-calibrator/data/tycho2_mag8.bin.gz",
+  "source": "external:tycho2_mag8.bin.gz",
   "count": 42072,
   "recordFloat32Count": 3,
   "fields": [

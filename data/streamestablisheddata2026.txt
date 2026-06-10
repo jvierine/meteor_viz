@@ -3,7 +3,7 @@
 :===========================================================================================================================================
 :IAU Meteor Data Center. Established meteor showers. V.2 
 :===========================================================================================================================================
-: Last update: May 31, 20:00:00 UTC, 2026  Modified by R. Rudawska, M. Hajdukova and T.J.Jopek (98 comment lines)
+: Last update: Jun 05, 20:00:00 UTC, 2026  Modified by R. Rudawska, M. Hajdukova and T.J.Jopek (98 comment lines)
 :              DATA VALIDATION !!! bracket ' [ '  in the column ??? means that The data has been checked
 :              Notice! List of shower group was remowed, their members are in the MDC
 :              The AdNo were modified when it was neccassary  (2022.05.10)

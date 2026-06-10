@@ -2,9 +2,10 @@ using GLMakie
 using HDF5
 using ProgressMeter
 
+input_path = isempty(ARGS) ? joinpath(@__DIR__, "data", "maarsy_dataset.h5") : ARGS[1]
 
 ## Load the data
-hid = h5open("combined_results.h5", "r")
+hid = h5open(input_path, "r")
 
 # cap the velocity values
 vel = read(hid["vels"])

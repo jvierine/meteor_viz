@@ -57,16 +57,10 @@ If a browser is already downloading `data/maarsy_dataset.h5`, the export script 
 
 # Regeneration
 
-Regenerate the streamed web catalogue:
+Regenerate the streamed web catalogue from the full MAARSY HDF5:
 
 ```sh
 python web/export_catalog_chunks.py
-```
-
-Regenerate the reduced standalone export:
-
-```sh
-python export_web_data.py
 python build_standalone.py
 ```
 
@@ -75,5 +69,3 @@ Regenerate the parent-body overlay:
 ```sh
 python export_parent_bodies.py
 ```
-
-If you need the reduced standalone export, `export_web_data.py` expects a reduced HDF5 prepared outside this repository. When that file is missing, the script prints the Zenodo source URL and explains that the raw `data/maarsy_dataset.h5` download is not the same thing as the reduced input it needs.

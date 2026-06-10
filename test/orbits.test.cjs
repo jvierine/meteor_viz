@@ -8,7 +8,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { FIELD, buildCumulativeWeights, keplerPositionFromTable, segmentIsContinuous, weightedChoice } = require("../web/orbits.cjs");
 
-const STRIDE = 10;
+const STRIDE = 7;
 
 function row(values) {
   const table = new Float32Array(STRIDE);
@@ -18,16 +18,40 @@ function row(values) {
   table[FIELD.OMEGA] = values.omega || 0;
   table[FIELD.NODE] = values.node || 0;
   table[FIELD.NU] = values.nu || 0;
-  table[FIELD.EPOCH_DAY] = values.epoch || 0;
+  table[FIELD.MASS_TO_AREA] = values.massToArea || 0;
   return table;
+}
+
+function parseAssignment(filePath, prefix) {
+  const text = fs.readFileSync(filePath, "utf8");
+  return JSON.parse(text.slice(prefix.length, text.lastIndexOf(";")));
+}
+
+function halfToFloat(h) {
+  const sign = (h & 0x8000) ? -1 : 1;
+  const exponent = (h >> 10) & 0x1f;
+  const fraction = h & 0x03ff;
+  if (exponent === 0) return fraction === 0 ? sign * 0 : sign * Math.pow(2, -14) * (fraction / 1024);
+  if (exponent === 31) return fraction === 0 ? sign * Infinity : NaN;
+  return sign * Math.pow(2, exponent - 15) * (1 + fraction / 1024);
+}
+
+function decodeFloat16(buffer) {
+  const input = new Uint16Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 2);
+  const output = new Float32Array(input.length);
+  for (let i = 0; i < input.length; i++) output[i] = halfToFloat(input[i]);
+  return output;
 }
 
 function loadBrowserCatalogue() {
   const root = path.resolve(__dirname, "..");
-  const meta = JSON.parse(fs.readFileSync(path.join(root, "web/data/merge_factor_16.json"), "utf8"));
-  const raw = fs.readFileSync(path.join(root, "web/data/merge_factor_16.bin"));
-  const table = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
-  return { root, meta, table, stride: meta.recordFloat32Count, count: meta.count };
+  const meta = parseAssignment(path.join(root, "web/data/maarsy_full_manifest.js"), "window.METEOR_VIZ_CATALOG = ");
+  const chunks = meta.chunks.map((chunk) =>
+    parseAssignment(path.join(root, `web/data/maarsy_full_${String(chunk.id).padStart(2, "0")}.js`), "window.METEOR_VIZ_CHUNK = ")
+  );
+  const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk.base64Float16, "base64")));
+  const table = decodeFloat16(bytes);
+  return { root, meta, table, stride: meta.recordFloat16Count, count: meta.count };
 }
 
 function keplerRow(table, rowOffset) {
@@ -120,19 +144,15 @@ test("newly selected meteors do not draw pre-selection trail segments", () => {
   assert.ok(drawable > 0, "new trail starts growing after selection");
 });
 
-test("representative meteor sampling is weighted by merged member count", () => {
+test("uniform sampling helper falls back to one weight per meteor", () => {
   const table = new Float32Array(3 * STRIDE);
-  table[FIELD.MEMBERS] = 1;
-  table[STRIDE + FIELD.MEMBERS] = 16;
-  table[2 * STRIDE + FIELD.MEMBERS] = 3;
   const indices = [0, 1, 2];
   const { cumulative, total } = buildCumulativeWeights(indices, table, STRIDE);
-  assert.deepEqual(Array.from(cumulative), [1, 17, 20]);
-  assert.equal(total, 20);
+  assert.deepEqual(Array.from(cumulative), [1, 2, 3]);
+  assert.equal(total, 3);
   assert.equal(weightedChoice(indices, cumulative, total, 0.00), 0);
-  assert.equal(weightedChoice(indices, cumulative, total, 0.05), 1);
-  assert.equal(weightedChoice(indices, cumulative, total, 0.84), 1);
-  assert.equal(weightedChoice(indices, cumulative, total, 0.86), 2);
+  assert.equal(weightedChoice(indices, cumulative, total, 0.34), 1);
+  assert.equal(weightedChoice(indices, cumulative, total, 0.67), 2);
 });
 
 test("meteor shower inclination presets with min/max are applied as angle limits", () => {
@@ -155,7 +175,7 @@ test("JavaScript Kepler propagation matches pyorb on sampled catalogue rows", ()
     const rowOffset = i * stride;
     const e = table[rowOffset + FIELD.E];
     if (Math.abs(e - 1) <= 1e-3) continue;
-    rows.push({ index: i, kep: keplerRow(table, rowOffset), epochDay: table[rowOffset + FIELD.EPOCH_DAY] });
+    rows.push({ index: i, kep: keplerRow(table, rowOffset) });
   }
   const py = spawnSync("python", [path.join(root, "test/pyorb_reference.py")], {
     input: JSON.stringify({ times, rows }),

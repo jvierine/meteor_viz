@@ -10,10 +10,8 @@ const FIELD = {
   OMEGA: 3,
   NODE: 4,
   NU: 5,
-  EPOCH_DAY: 6,
-  MASS_TO_AREA: 7,
-  MEMBERS: 8,
-  Q: 9,
+  MASS_TO_AREA: 6,
+  Q: -1,
 };
 
 function keplerPositionFromTable(dataTable, stride, row, tDay, maxRadius) {
@@ -23,7 +21,7 @@ function keplerPositionFromTable(dataTable, stride, row, tDay, maxRadius) {
   const argp = dataTable[row + FIELD.OMEGA] * DEG;
   const node = dataTable[row + FIELD.NODE] * DEG;
   const nu0 = dataTable[row + FIELD.NU] * DEG;
-  const dt = tDay - dataTable[row + FIELD.EPOCH_DAY];
+  const dt = tDay;
   const absA = Math.max(Math.abs(a), 1e-6);
   const cosNu0 = Math.cos(nu0);
   const sinNu0 = Math.sin(nu0);
@@ -81,12 +79,12 @@ function segmentIsContinuous(a, b, maxRadius, trailDays, segmentCount) {
   return jump <= Math.min(maxRadius * 0.75, Math.max(perSegmentLimit, speedLimit));
 }
 
-function buildCumulativeWeights(indices, dataTable, stride, memberField = FIELD.MEMBERS) {
+function buildCumulativeWeights(indices, dataTable, stride, memberField = null) {
   const cumulative = new Float64Array(indices.length);
   let total = 0;
   for (let i = 0; i < indices.length; i++) {
     const row = indices[i] * stride;
-    const members = dataTable[row + memberField];
+    const members = memberField == null ? 1 : dataTable[row + memberField];
     total += Number.isFinite(members) && members > 0 ? members : 1;
     cumulative[i] = total;
   }
